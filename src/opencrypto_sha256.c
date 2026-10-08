@@ -121,6 +121,22 @@ void oc_sha256_final(OCSHA256 *ctx, uint8_t out[32])
     oc_cleanse(ctx, sizeof *ctx);
 }
 
+/* The compression function over whole blocks, the chaining value kept as
+ * 32 bytes, big-endian (see oc_sha512_blocks). */
+void oc_sha256_blocks(uint8_t state[OC_SHA256_BYTES], const void *data, size_t nblocks)
+{
+    OCSHA256 ctx;
+    const uint8_t *p = (const uint8_t *)data;
+    unsigned i;
+    for (i = 0; i < 8; ++i)
+        ctx.h[i] = load_be32(state + i * 4);
+    for (; nblocks; --nblocks, p += 64)
+        transform(&ctx, p);
+    for (i = 0; i < 8; ++i)
+        store_be32(state + i * 4, ctx.h[i]);
+    oc_cleanse(&ctx, sizeof ctx);
+}
+
 void oc_sha256(const void *data, size_t length, uint8_t out[32])
 {
     OCSHA256 ctx;

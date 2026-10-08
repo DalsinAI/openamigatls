@@ -1,0 +1,5 @@
+build/
+build-amiga/
+build-cm/
+build-host/
+build-interop/
