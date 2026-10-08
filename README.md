@@ -25,19 +25,19 @@ needs, for OpenPuTTY first:
 | AES-128/192/256 | CTR (SSH's SDCTR), CBC, ECB; constant time |
 | ChaCha20, Poly1305 | the 64-bit nonce form SSH's `chacha20-poly1305@openssh.com` uses |
 
-On AmigaChrome the host does the heavy work: each operation is an AC090
-magic function (`library/oc_magic.h`), which AC090 runs as host code from
+On AmigaChrome the x86 or ARM64 cores do the heavy work: each operation is an AC090
+magic function (`library/oc_magic.h`), which AC090 runs as x86 or ARM64 code from
 the same C (amigachrome's `jit_crypto.c`); everywhere else the library
-runs it as 68k code. `OC_Accelerated()` says which operations are host code. In an
+runs it as 68k code. `OC_Accelerated()` says which operations are x86 or ARM64 code. In an
 AmigaChrome lab (scratch copy of Instance-11, AC090 68040, 8 October 2026)
 OpenPuTTY's NTRU Prime / Curve25519 key exchange went from 11 s with
-PuTTY's own code on the old JIT to about 60 ms with OpenCrypto as host
+PuTTY's own code on the old JIT to about 60 ms with OpenCrypto as x86
 code; DESIGN.md section 8 has the 68k figures and the tests.
 
 ## Building and testing
 
     cmake -S . -B build && cmake --build build && ctest --test-dir build
-        the portable core on the PC: the published vectors
+        the portable core on x86 cores: the published vectors
         (tests/test_ssh_primitives.c) and, with Python's cryptography
         package, random inputs against OpenSSL (tests/differential.py)
     tests/interop_putty.sh
@@ -57,7 +57,7 @@ OpenBrowser / curl OpenTLS backend / native applications
                          |
                   opencrypto.library
               /          |           \
-           68040       AC090       host/OpenGPU
+           68040       AC090       x86/ARM64/OpenGPU
 ```
 
 OpenGPU is optional and only used where batching makes it faster. TLS semantics
