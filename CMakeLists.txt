@@ -4,7 +4,7 @@ project(OpenTLS C)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-add_library(opencrypto STATIC src/opencrypto_sha256.c)
+add_library(opencrypto STATIC src/opencrypto_sha256.c src/opencrypto_sha512.c)
 target_include_directories(opencrypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(test_opencrypto tests/test_opencrypto.c)
