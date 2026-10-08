@@ -28,13 +28,11 @@ needs, for OpenPuTTY first:
 On AmigaChrome the host does the heavy work: each operation is an AC090
 magic function (`library/oc_magic.h`), which AC090 runs as host code from
 the same C (amigachrome's `jit_crypto.c`); everywhere else the library
-runs it as 68k code. `OC_Accelerated()` says which operations are host
-code. Measured in an AmigaChrome lab (scratch copy of Instance-11, AC090
-68040, 8 October 2026; `tests/bench_library.c`):
-
-| Operation | 68k code (AC090 JIT) | Host code (magic) |
-| --- | --- | --- |
-| see DESIGN.md section 8 | | |
+runs it as 68k code. `OC_Accelerated()` says which operations are host code. In an
+AmigaChrome lab (scratch copy of Instance-11, AC090 68040, 8 October 2026)
+OpenPuTTY's NTRU Prime / Curve25519 key exchange went from 11 s with
+PuTTY's own code on the old JIT to about 60 ms with OpenCrypto as host
+code; DESIGN.md section 8 has the 68k figures and the tests.
 
 ## Building and testing
 
