@@ -6,6 +6,7 @@
 #include <exec/libraries.h>
 #include <exec/execbase.h>
 #include <exec/memory.h>
+#include <dos/dos.h>
 #include <proto/exec.h>
 
 #include "../include/libraries/opencrypto.h"
