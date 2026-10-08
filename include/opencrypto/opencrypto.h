@@ -10,6 +10,9 @@ extern "C" {
 
 #define OC_SHA256_BYTES 32
 #define OC_SHA256_BLOCK_BYTES 64
+#define OC_SHA384_BYTES 48
+#define OC_SHA512_BYTES 64
+#define OC_SHA512_BLOCK_BYTES 128
 
 typedef struct OCSHA256 {
     uint32_t h[8];
@@ -17,6 +20,13 @@ typedef struct OCSHA256 {
     uint8_t block[OC_SHA256_BLOCK_BYTES];
     size_t block_used;
 } OCSHA256;
+
+typedef struct OCSHA512 {
+    uint64_t h[8];
+    uint64_t total_bytes;
+    uint8_t block[OC_SHA512_BLOCK_BYTES];
+    size_t block_used;
+} OCSHA512;
 
 void oc_sha256_init(OCSHA256 *ctx);
 void oc_sha256_update(OCSHA256 *ctx, const void *data, size_t length);
@@ -28,6 +38,18 @@ void oc_hmac_sha256(const void *key, size_t key_length,
                     uint8_t out[OC_SHA256_BYTES]);
 
 int oc_hkdf_sha256(const void *salt, size_t salt_length,
+                   const void *ikm, size_t ikm_length,
+                   const void *info, size_t info_length,
+                   void *out, size_t out_length);
+
+void oc_sha384(const void *data, size_t length, uint8_t out[OC_SHA384_BYTES]);
+void oc_sha512(const void *data, size_t length, uint8_t out[OC_SHA512_BYTES]);
+
+void oc_hmac_sha384(const void *key, size_t key_length,
+                    const void *data, size_t data_length,
+                    uint8_t out[OC_SHA384_BYTES]);
+
+int oc_hkdf_sha384(const void *salt, size_t salt_length,
                    const void *ikm, size_t ikm_length,
                    const void *info, size_t info_length,
                    void *out, size_t out_length);
