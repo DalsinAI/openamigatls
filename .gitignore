@@ -1,0 +1,7 @@
+build/
+build-amiga/
+build-amiga-tls/
+build-wolfssl-amiga/
+build-wolfssl-host/
+third_party/wolfssl/
+*.o
