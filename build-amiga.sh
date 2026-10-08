@@ -38,7 +38,10 @@ cp "$HERE/include/proto/opencrypto.h" "$OUT/include/proto/"
 # -fno-tree-loop-distribute-patterns: the stove's GCC 16.2.0b turns a loop
 # that shifts an array up (v[i] = v[i - 1], i falling) into an inline
 # forward copy, which corrupts it (src/opencrypto_sntrup761.c says more)
-CFLAGS="$CPUFLAGS -O2 -fno-tree-loop-distribute-patterns -fomit-frame-pointer -Wall -Wextra -Werror -Wno-unused-parameter -I$HERE/include -I$HERE/library"
+# -fno-delete-null-pointer-checks: address 0 is memory on an Amiga; without
+# it GCC puts TRAP #7 (Software Failure 80000027) where it proves a pointer
+# null, in place of the access
+CFLAGS="$CPUFLAGS -O2 -fno-tree-loop-distribute-patterns -fno-delete-null-pointer-checks -fomit-frame-pointer -Wall -Wextra -Werror -Wno-unused-parameter -I$HERE/include -I$HERE/library"
 
 # the magic functions' tags are assembly: no LTO for that file (ac_magic.h)
 "$CC" $CFLAGS -fno-lto -mcrt=nix20 -c "$HERE/library/oc_magic.c" -o "$OUT/obj/oc_magic.o"
