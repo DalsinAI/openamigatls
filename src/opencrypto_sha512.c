@@ -162,6 +162,38 @@ static void sha512_final_common(OCSHA512 *ctx, uint8_t *out, size_t out_bytes)
     oc_cleanse(ctx, sizeof *ctx);
 }
 
+void oc_sha512_init(OCSHA512 *ctx)
+{
+    sha512_init_common(ctx, 0);
+}
+
+void oc_sha512_update(OCSHA512 *ctx, const void *data, size_t length)
+{
+    sha512_update(ctx, data, length);
+}
+
+void oc_sha512_final(OCSHA512 *ctx, uint8_t out[OC_SHA512_BYTES])
+{
+    sha512_final_common(ctx, out, 64);
+}
+
+/* The compression function over whole blocks, the chaining value kept as
+ * 64 bytes, big-endian (the same bytes on every host): what a caller with
+ * its own buffering (PuTTY's SHA-512) needs, and AC090's host code. */
+void oc_sha512_blocks(uint8_t state[OC_SHA512_BYTES], const void *data, size_t nblocks)
+{
+    OCSHA512 ctx;
+    const uint8_t *p = (const uint8_t *)data;
+    unsigned i;
+    for (i = 0; i < 8; ++i)
+        ctx.h[i] = load_be64(state + i * 8);
+    for (; nblocks; --nblocks, p += 128)
+        sha512_transform(&ctx, p);
+    for (i = 0; i < 8; ++i)
+        store_be64(state + i * 8, ctx.h[i]);
+    oc_cleanse(&ctx, sizeof ctx);
+}
+
 void oc_sha384(const void *data, size_t length, uint8_t out[48])
 {
     OCSHA512 ctx;
