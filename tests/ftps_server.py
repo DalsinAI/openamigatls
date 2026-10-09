@@ -6,6 +6,7 @@ does not resume the control connection's TLS session (522).
 Local only: it listens on 127.0.0.1.
 
   ftps_server.py CERT KEY ROOTDIR PORTFILE [--max-tls12] [--no-require-reuse]
+                 [--port N] [--pasv-ports FIRST-LAST]
 
 Writes the port it listens on to PORTFILE, then serves until killed.
 MIT licensed and free. Copyright (c) 2026 Dalsin Limited."""
@@ -14,6 +15,28 @@ import socket
 import ssl
 import sys
 import threading
+
+
+PASV_PORTS = None
+PASV_NEXT = [0]
+
+
+def pasv_socket():
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if not PASV_PORTS:
+        s.bind(("127.0.0.1", 0))
+        return s
+    first, last = PASV_PORTS
+    for _ in range(last - first + 1):
+        port = first + PASV_NEXT[0] % (last - first + 1)
+        PASV_NEXT[0] += 1
+        try:
+            s.bind(("127.0.0.1", port))
+            return s
+        except OSError:
+            continue
+    raise OSError("no passive port free")
 
 
 def serve(conn, ctx, root, require_reuse):
@@ -58,8 +81,7 @@ def serve(conn, ctx, root, require_reuse):
         elif cmd == "PASV":
             if pasv:
                 pasv.close()
-            pasv = socket.socket()
-            pasv.bind(("127.0.0.1", 0))
+            pasv = pasv_socket()
             pasv.listen(1)
             port = pasv.getsockname()[1]
             send("227 Entering Passive Mode (127,0,0,1,%d,%d)." % (port >> 8, port & 255))
@@ -102,14 +124,21 @@ def serve(conn, ctx, root, require_reuse):
 
 def main():
     cert, key, root, portfile = sys.argv[1:5]
+    global PASV_PORTS
     require_reuse = "--no-require-reuse" not in sys.argv
+    port = 0
+    if "--port" in sys.argv:
+        port = int(sys.argv[sys.argv.index("--port") + 1])
+    if "--pasv-ports" in sys.argv:
+        a, b = sys.argv[sys.argv.index("--pasv-ports") + 1].split("-")
+        PASV_PORTS = (int(a), int(b))
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert, key)
     if "--max-tls12" in sys.argv:
         ctx.maximum_version = ssl.TLSVersion.TLSv1_2
     lsock = socket.socket()
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    lsock.bind(("127.0.0.1", 0))
+    lsock.bind(("127.0.0.1", port))
     lsock.listen(5)
     with open(portfile + ".tmp", "w") as f:
         f.write(str(lsock.getsockname()[1]))

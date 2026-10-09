@@ -522,6 +522,9 @@ static const br_ec_impl ot_ec_impl = {
 void ot_glue_select(struct ot_impls *m, int offload)
 {
     ULONG acc = offload ? ot_glue_accelerated() : 0;
+#ifdef OT_GLUE_MASK          /* measuring: leave some operations to BearSSL */
+    acc &= ~(ULONG)(OT_GLUE_MASK);
+#endif
 
     m->sha256 = (acc & OTACC_HASH) ? &ot_sha256_vtable : &br_sha256_vtable;
     m->sha384 = (acc & OTACC_HASH) ? &ot_sha384_vtable : &br_sha384_vtable;

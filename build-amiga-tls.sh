@@ -5,6 +5,8 @@
 #   CPU      020 (default: 68020 to 68060) or 060 (no 64-bit multiplies:
 #            BearSSL's 15-bit maths, as the 68060 traps them)
 #   OUT      the output directory (default build-amiga-tls)
+#   EXTRA_CFLAGS  more compiler flags (e.g. -DOT_GLUE_MASK=1: measuring
+#            with some operations left to BearSSL; OTACC_* bits)
 #   FPCR_CHECK  openamigartg's tools/fpcr_check.py, run on the results when
 #               set (the GCC 16 -m68040 FPCR clash; the build uses no FPU)
 # Outputs: lib/opentls.library, tests/OpenTLSClient, tests/OpenTLSFTPSGet,
@@ -31,7 +33,7 @@ cp -r "$HERE/include/libraries" "$HERE/include/proto" "$HERE/include/inline" \
 
 # -fno-tree-loop-distribute-patterns: GCC 16.2.0b's loop-shift miscompile
 # -fno-delete-null-pointer-checks: address 0 is memory on an Amiga
-BASE="$CPUFLAGS -O2 -fno-tree-loop-distribute-patterns -fno-delete-null-pointer-checks -fomit-frame-pointer"
+BASE="$CPUFLAGS -O2 -fno-tree-loop-distribute-patterns -fno-delete-null-pointer-checks -fomit-frame-pointer ${EXTRA_CFLAGS:-}"
 # BearSSL's build-time choices for the 68k: no OS random or clock (OpenTLS
 # gives both), no x86/POWER code, 32-bit words
 BRDEFS="-DBR_USE_UNIX_TIME=0 -DBR_USE_WIN32_TIME=0 -DBR_USE_URANDOM=0 -DBR_USE_WIN32_RAND=0 \
@@ -39,14 +41,26 @@ BRDEFS="-DBR_USE_UNIX_TIME=0 -DBR_USE_WIN32_TIME=0 -DBR_USE_URANDOM=0 -DBR_USE_W
  -DBR_LE_UNALIGNED=0 -DBR_BE_UNALIGNED=0 $MATH"
 INC="-I$HERE/include -I$BR/inc -I$BR/src -I$HERE/src/opentls"
 
-# BearSSL, as an archive: the link takes only what the client uses
-for f in "$BR"/src/*/*.c "$BR"/src/*.c; do
+# BearSSL, as an archive: the link takes only what the client uses.
+# Compiled eight at a time; any compile that fails fails the build.
+PIDS=""
+OBJS=""
+FAILED=0
+for f in "$BR"/src/*/*.c; do
     o="$OUT/obj/bearssl/$(basename "$(dirname "$f")")_$(basename "$f" .c).o"
+    OBJS="$OBJS $o"
     "$CC" $BASE $BRDEFS -mcrt=nix20 -I"$BR/inc" -I"$BR/src" -c "$f" -o "$o" &
-    while [ "$(jobs -p | wc -l)" -ge 8 ]; do sleep 0.1; done
+    PIDS="$PIDS $!"
+    set -- $PIDS
+    if [ $# -ge 8 ]; then
+        wait "$1" || FAILED=1
+        shift
+        PIDS="$*"
+    fi
 done
-wait
-"$AR" rcs "$OUT/lib/libbearssl68k.a.new" "$OUT"/obj/bearssl/*.o
+for p in $PIDS; do wait "$p" || FAILED=1; done
+[ "$FAILED" = 0 ] || { echo "BearSSL did not compile"; exit 1; }
+"$AR" rcs "$OUT/lib/libbearssl68k.a.new" $OBJS
 mv -f "$OUT/lib/libbearssl68k.a.new" "$OUT/lib/libbearssl68k.a"
 
 OTSRC="$HERE/src/opentls/ot_core.c $HERE/src/opentls/ot_glue.c $HERE/src/opentls/ot_platform.c

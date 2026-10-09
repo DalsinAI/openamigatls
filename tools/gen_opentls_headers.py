@@ -40,6 +40,8 @@ CALLS = [
     ("OT_Random", "LONG", [("APTR", "buffer", "a0"), ("LONG", "length", "d0")]),
     ("OT_Accelerated", "ULONG", []),
     ("OT_GetErrorDetail", "LONG", [(X, "connection", "a0")]),
+    # version 1, revision 1 (additive)
+    ("OT_GetPeerName", "CONST_STRPTR", [(X, "connection", "a0")]),
 ]
 BIAS = 30
 

@@ -20,6 +20,9 @@
  *     --hook           move bytes through an I/O hook, not the socket
  *     --nonblock       a non-blocking socket (calls repeated on WOULDBLOCK)
  *     --repeat N       N handshakes (no resumption) and their mean time
+ *     --print          print what --send brought back (the first 64 KB)
+ *     --trace          with --hook: each read and write, timed (where a
+ *                      handshake's time goes)
  * Prints key=value lines; exit code 0 when all went as asked.
  *
  * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
@@ -62,7 +65,8 @@ static struct timerequest treq;
 
 static const char *opt_ca, *opt_trust, *opt_pin, *opt_sni, *opt_alpn, *opt_send, *opt_expect;
 static int opt_nosys, opt_verify, opt_min, opt_max, opt_conns = 1, opt_nooff, opt_small,
-           opt_hook, opt_nonblock, opt_repeat = 0;
+           opt_hook, opt_nonblock, opt_repeat = 0, opt_trace, opt_print;
+static double trace_t0;
 
 static double now_ms(void)
 {
@@ -146,9 +150,13 @@ static ULONG hook_io(struct Hook *h, APTR obj, APTR msgp)
     struct OTIOMessage *m = msgp;
 #endif
     long s = (long)h->h_Data, n;
+    double before = opt_trace ? now_ms() : 0;
     (void)obj;
     if (m->MethodID == OTIO_READ) n = recv(s, m->Buffer, m->Length, 0);
     else n = send(s, m->Buffer, m->Length, 0);
+    if (opt_trace)
+        printf("trace %8.2f %s %ld (%.2f ms in the call)\n", before - trace_t0,
+               m->MethodID == OTIO_READ ? "read " : "write", n, now_ms() - before);
     if (n < 0) return (ULONG)OTERR_IO;
     return (ULONG)n;
 }
@@ -210,7 +218,7 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
     if (opt_verify) OT_SetVerify(c, opt_verify);
     if (opt_pin) { if (!hexpin(opt_pin, pin)) return 0; OT_PinCertificate(c, pin); }
     if (*session) OT_SetSession(c, *session);
-    t0 = now_ms();
+    t0 = trace_t0 = now_ms();
     while ((rc = OT_Handshake(c)) == OTERR_WOULDBLOCK) wait_socket(s);
     t1 = now_ms();
     if (ms) *ms += t1 - t0;
@@ -218,6 +226,7 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
         printf("conn%d.fingerprint=", index);
         for (i = 0; i < 32; ++i) printf("%02x", fp[i]);
         printf("\n");
+        printf("conn%d.peername=%s\n", index, (const char *)OT_GetPeerName(c));
     }
     if (rc != OTERR_OK) {
         printf("conn%d.error=%ld\nconn%d.detail=%ld\nconn%d.text=%s\n", index, (long)rc,
@@ -241,8 +250,11 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
             break;
         }
         if (n != (long)strlen(out)) { printf("conn%d.write=%ld\n", index, n); ok = 0; }
-        while (ok && got < (long)sizeof in - 1) {
-            n = OT_Read(c, in + got, (LONG)(sizeof in - 1 - got));
+        for (;;) {      /* everything, keeping the first 64 KB */
+            static char sink[8192];
+            char *dst = got < (long)sizeof in - 1 ? in + got : sink;
+            long room = got < (long)sizeof in - 1 ? (long)sizeof in - 1 - got : (long)sizeof sink;
+            n = OT_Read(c, dst, (LONG)room);
             if (n == OTERR_WOULDBLOCK) { wait_socket(s); continue; }
             if (n <= 0) {
                 if (n < 0 && n != OTERR_CLOSED) {
@@ -254,8 +266,9 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
             }
             got += n;
         }
-        in[got] = 0;
+        in[got < (long)sizeof in - 1 ? got : (long)sizeof in - 1] = 0;
         printf("conn%d.received=%ld\n", index, got);
+        if (opt_print) printf("%s\n", in);
         if (opt_expect && !strstr(in, opt_expect)) { printf("conn%d.expect=missing\n", index); ok = 0; }
     }
     while (OT_Close(c) == OTERR_WOULDBLOCK) wait_socket(s);
@@ -297,6 +310,8 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--small")) opt_small = 1;
         else if (!strcmp(a, "--hook")) opt_hook = 1;
         else if (!strcmp(a, "--nonblock")) opt_nonblock = 1;
+        else if (!strcmp(a, "--trace")) opt_trace = 1;
+        else if (!strcmp(a, "--print")) opt_print = 1;
         else if (!host) host = a;
         else port = atoi(a);
     }

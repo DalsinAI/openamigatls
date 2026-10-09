@@ -55,9 +55,9 @@ calls: a program that leaves `MaxVersion` at 0 gets it without changes.
 | `OTERR_INTERNAL` | -18 | a bug in OpenTLS |
 | `OTERR_PINNED` | -19 | `OTV_PINNED_ONLY` and the certificate is not the pinned one |
 
-The certificate errors (-10 to -13, -19) leave the peer's certificate
-readable with `OT_GetPeerFingerprint()` and `OT_GetPeerCertificate()`, so a
-program can show it and ask whether to trust it.
+The certificate errors (-10 to -14, -19) leave the peer's certificate
+readable with `OT_GetPeerFingerprint()`, `OT_GetPeerCertificate()` and
+`OT_GetPeerName()`, so a program can show it and ask whether to trust it.
 
 ## The trust store
 
@@ -365,6 +365,22 @@ the certificate. `OTERR_STATE` if no certificate was seen.
 Copies the server's certificate (DER) into `buffer` and answers its length.
 With `buffer` NULL, answers the length only; a buffer too small gives
 `OTERR_ARGS`. Same availability as `OT_GetPeerFingerprint()`.
+
+## OT_GetPeerName (version 1, revision 1)
+
+    name = OT_GetPeerName(connection)
+    D0                    A0
+
+    CONST_STRPTR OT_GetPeerName(struct OTConnection *connection);
+
+The name the server's certificate is for, for showing to the user: its
+first DNS name, or else its subject's common name; "" if none was seen.
+Same availability as `OT_GetPeerFingerprint()`: after a handshake that
+failed on the certificate too, `OTERR_TRUSTSTORE` included (a fresh Amiga
+without a CA bundle still reaches the server's certificate, so a program
+can ask "trust this server?" and pin it). The string belongs to the
+connection. Check the revision (`OT_Version() & 0xFFFF` at least 1, or
+`OpenLibrary("opentls.library", 1)` and `lib_Revision`) before calling it.
 
 ## OT_Random
 

@@ -145,10 +145,16 @@ def case(name, server, client_args, expect, env=None, host="localhost"):
 
 
 CA = ["--ca", "root.pem", "--no-system"]
+WWW_HEADER = "HTTP/1.0 200 ok\r\nContent-type: text/plain\r\n\r\n"     # what s_server -WWW sends first
 
 
 def main():
     fp_self = make_pki()
+    if os.environ.get("OPENTLS_PKI_ONLY"):
+        os.chdir(WORK)
+        make_full()
+        print("PKI in %s" % WORK)
+        return 0
     os.chdir(WORK)
     get = ["--send", "GET / HTTP/1.0\\r\\n\\r\\n"]
 
@@ -182,7 +188,7 @@ def main():
     case("untrusted (self-signed) certificate", Server("self", chain=False), CA,
          {"result": "fail", "conn0.error": "-10", "conn0.fingerprint": fp_self})
     case("wrong host name", Server("wrong"), CA,
-         {"result": "fail", "conn0.error": "-11",
+         {"result": "fail", "conn0.error": "-11", "conn0.peername": "wrong.example",
           "conn0.text": "The server's certificate is for wrong.example, not localhost."})
     case("expired certificate", Server("expired"), CA, {"result": "fail", "conn0.error": "-12"})
     case("pinned self-signed certificate", Server("self", chain=False), CA + ["--pin", fp_self],
@@ -203,7 +209,7 @@ def main():
          {"result": "ok", "conn1.resumed": "1"})
     case("small buffers", Server("ecleaf"), CA + get + ["--small"], {"result": "ok"})
     case("1 MB download", Server("ecleaf", www="-WWW"), CA + ["--send", "GET /big.bin HTTP/1.0\\r\\n\\r\\n"],
-         {"result": "ok"})
+         {"result": "ok", "conn0.received": str((1 << 20) + len(WWW_HEADER))})
     # the system trust store: OPENTLS_ROOT stands in for ENV:OpenTLS
     root = os.path.join(WORK, "envroot")
     os.makedirs(os.path.join(root, "certs"), exist_ok=True)
@@ -218,6 +224,11 @@ def main():
     os.makedirs(empty, exist_ok=True)
     case("no trust store at all", Server("ecleaf"), [], {"result": "fail", "conn0.error": "-14"},
          env=dict(os.environ, OPENTLS_ROOT=empty))
+    case("no trust store: a self-signed server's certificate still readable", Server("self", chain=False), [],
+         {"result": "fail", "conn0.error": "-14", "conn0.fingerprint": fp_self, "conn0.peername": "localhost"},
+         env=dict(os.environ, OPENTLS_ROOT=empty))
+    case("no trust store, the certificate pinned", Server("self", chain=False), ["--pin", fp_self],
+         {"result": "ok"}, env=dict(os.environ, OPENTLS_ROOT=empty))
     env_future = dict(os.environ, OPENTLS_TEST_TIME=str(int(time.time()) + 400 * 86400))
     case("clock past the leaf's notAfter", Server("ecleaf"), CA, {"result": "fail", "conn0.error": "-12"},
          env=env_future)

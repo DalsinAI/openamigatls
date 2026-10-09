@@ -16,12 +16,13 @@
 #include "bearssl.h"
 
 #define OT_LIB_VERSION   1
-#define OT_LIB_REVISION  0
+#define OT_LIB_REVISION  1          /* 1.1: OT_GetPeerName */
 
 #define OT_HOST_MAX      255
 #define OT_ALPN_MAX      8          /* protocols offered at once */
 #define OT_TEXT_MAX      200
 #define OT_LEAF_MAX      16384      /* the server's certificate kept for the caller */
+#define OT_OUT_MAX       4096       /* small records gathered into one send */
 
 /* Our own engine error codes, past BearSSL's X.509 range (32..63). */
 #define OT_X509_PINNED     70       /* OTV_PINNED_ONLY and not the pin */
@@ -143,6 +144,8 @@ struct OTConnection {
     struct OTContext *ctx;
     unsigned char *iobuf;
     size_t iobuf_len;
+    unsigned char *out;              /* records gathered to go in one send */
+    size_t out_len, out_sent;
     char host[OT_HOST_MAX + 1];
     unsigned char ip[16];
     int ip_len;                      /* 4 or 16 for an address, else 0 */
@@ -164,6 +167,8 @@ struct OTConnection {
     int clean_close;                 /* close_notify received */
     LONG error, detail;
     char text[OT_TEXT_MAX];
+    char peer_name[96];
+    int peer_name_done;
 };
 
 /* error text helpers (ot_core.c) */

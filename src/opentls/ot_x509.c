@@ -125,6 +125,7 @@ static void xw_start_chain(const br_x509_class **ctx, const char *server_name)
     x->leaf_ok = 0;
     x->leaf_len = 0;
     x->have_fingerprint = 0;
+    c->peer_name_done = 0;
     /* the minimal engine checks DNS names only: none for an address, none
      * when the caller turned the check off */
     (*INNER(x))->start_chain(INNER(x),

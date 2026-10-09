@@ -65,3 +65,5 @@ static ULONG LIB_OT_Accelerated(REG(a6, struct Library *base))
 { (void)base; return OT_Accelerated(); }
 static LONG LIB_OT_GetErrorDetail(REG(a0, struct OTConnection *connection), REG(a6, struct Library *base))
 { (void)base; return OT_GetErrorDetail(connection); }
+static CONST_STRPTR LIB_OT_GetPeerName(REG(a0, struct OTConnection *connection), REG(a6, struct Library *base))
+{ (void)base; return OT_GetPeerName(connection); }

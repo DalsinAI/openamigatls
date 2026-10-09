@@ -304,6 +304,53 @@ static LONG io(struct OTConnection *c, int write, unsigned char *buf, size_t len
                  : ot_sock_read(c->fd, c->socketbase, buf, (LONG)len);
 }
 
+/* Records go out gathered: BearSSL hands over one record at a time, and
+ * a handshake flight sent as several small segments meets Nagle's
+ * algorithm and the peer's delayed ACK (40 ms or more for each flight).
+ * Small records collect in c->out and leave in one send when the engine
+ * waits for the peer, or when they would not fit. */
+static LONG out_flush(struct OTConnection *c)
+{
+    while (c->out_sent < c->out_len) {
+        LONG n = io(c, 1, c->out + c->out_sent, c->out_len - c->out_sent);
+        if (n == OTERR_WOULDBLOCK)
+            return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
+        if (n <= 0) {
+            br_ssl_engine_fail(&c->cc.eng, BR_ERR_IO);
+            return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
+        }
+        c->out_sent += (size_t)n;
+    }
+    c->out_len = c->out_sent = 0;
+    return OTERR_OK;
+}
+
+/* takes what the engine has to send; OTERR_OK when it took some */
+static LONG out_take(struct OTConnection *c)
+{
+    br_ssl_engine_context *e = &c->cc.eng;
+    size_t len;
+    unsigned char *buf = br_ssl_engine_sendrec_buf(e, &len);
+    LONG n, rc;
+    if (c->out_len + len <= OT_OUT_MAX) {
+        memcpy(c->out + c->out_len, buf, len);
+        c->out_len += len;
+        br_ssl_engine_sendrec_ack(e, len);
+        return OTERR_OK;
+    }
+    if (c->out_len && (rc = out_flush(c)) != OTERR_OK) return rc;
+    if (len <= OT_OUT_MAX) return OTERR_OK;          /* gathered next time round */
+    n = io(c, 1, buf, len);                          /* a big record: as it is */
+    if (n == OTERR_WOULDBLOCK)
+        return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
+    if (n <= 0) {
+        br_ssl_engine_fail(e, BR_ERR_IO);
+        return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
+    }
+    br_ssl_engine_sendrec_ack(e, (size_t)n);
+    return OTERR_OK;
+}
+
 /* Runs the engine until its state has one of the target bits, writing and
  * reading records as it asks. OTERR_OK, OTERR_WOULDBLOCK or an error. */
 static LONG pump(struct OTConnection *c, unsigned target)
@@ -316,6 +363,7 @@ static LONG pump(struct OTConnection *c, unsigned target)
         LONG n;
         if (st & BR_SSL_CLOSED) {
             int err = br_ssl_engine_last_error(e);
+            if (c->out_len) out_flush(c);    /* an alert or close_notify, if it can go */
             if (err == BR_ERR_OK) {
                 c->clean_close = 1;
                 c->state = OTS_CLOSED;
@@ -324,23 +372,16 @@ static LONG pump(struct OTConnection *c, unsigned target)
             return engine_error(c, err);
         }
         if (st & BR_SSL_SENDREC) {
-            buf = br_ssl_engine_sendrec_buf(e, &len);
-            n = io(c, 1, buf, len);
-            if (n == OTERR_WOULDBLOCK)
-                return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
-            if (n <= 0) {
-                br_ssl_engine_fail(e, BR_ERR_IO);
-                return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
-            }
-            br_ssl_engine_sendrec_ack(e, (size_t)n);
+            if ((n = out_take(c)) != OTERR_OK) return n;
             continue;
         }
-        if (st & target) return OTERR_OK;
+        if (st & target) return c->out_len ? out_flush(c) : OTERR_OK;
         if (st & BR_SSL_RECVAPP) {   /* data to read first: not a target here */
             ot_set_error(c, OTERR_STATE, 0, "Read the data waiting before writing more.", NULL, NULL);
             return OTERR_STATE;
         }
         if (st & BR_SSL_RECVREC) {
+            if (c->out_len && (n = out_flush(c)) != OTERR_OK) return n;
             buf = br_ssl_engine_recvrec_buf(e, &len);
             n = io(c, 0, buf, len);
             if (n == OTERR_WOULDBLOCK)
@@ -366,22 +407,10 @@ static LONG pump(struct OTConnection *c, unsigned target)
 static LONG flush_out(struct OTConnection *c)
 {
     br_ssl_engine_context *e = &c->cc.eng;
-    for (;;) {
-        unsigned st = br_ssl_engine_current_state(e);
-        size_t len;
-        unsigned char *buf;
-        LONG n;
-        if (!(st & BR_SSL_SENDREC)) return OTERR_OK;
-        buf = br_ssl_engine_sendrec_buf(e, &len);
-        n = io(c, 1, buf, len);
-        if (n == OTERR_WOULDBLOCK)
-            return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
-        if (n <= 0) {
-            br_ssl_engine_fail(e, BR_ERR_IO);
-            return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
-        }
-        br_ssl_engine_sendrec_ack(e, (size_t)n);
-    }
+    LONG rc;
+    while (br_ssl_engine_current_state(e) & BR_SSL_SENDREC)
+        if ((rc = out_take(c)) != OTERR_OK) return rc;
+    return c->out_len ? out_flush(c) : OTERR_OK;
 }
 
 /* ---- contexts ---- */
@@ -538,8 +567,9 @@ struct OTConnection *OT_NewConnection(struct OTContext *x, CONST_STRPTR hostname
     c->ctx = x;
     c->fd = -1;
     c->iobuf_len = (x->flags & OTCF_SMALL_BUFFERS) ? BR_SSL_BUFSIZE_MONO : BR_SSL_BUFSIZE_BIDI;
-    c->iobuf = ot_alloc(c->iobuf_len);
+    c->iobuf = ot_alloc(c->iobuf_len + OT_OUT_MAX);
     if (!c->iobuf) { ot_free(c); if (error) *error = OTERR_NOMEM; return NULL; }
+    c->out = c->iobuf + c->iobuf_len;
     if (h[0] == '[' && h[l - 1] == ']' && l - 2 < sizeof c->host) {   /* [v6] */
         memcpy(c->host, h + 1, l - 2);
         c->host[l - 2] = 0;
@@ -559,7 +589,7 @@ VOID OT_FreeConnection(struct OTConnection *c)
     if (!c) return;
     ot_x509_free(&c->x509);
     if (c->iobuf) {
-        memset(c->iobuf, 0, c->iobuf_len);
+        memset(c->iobuf, 0, c->iobuf_len + OT_OUT_MAX);
         ot_free(c->iobuf);
     }
     ot_free(c->alpn);
@@ -660,12 +690,11 @@ static LONG start_handshake(struct OTConnection *c)
 
     if (!c->have_io)
         return fail(c, OTERR_STATE, 0, "No socket or I/O hook was given.", NULL, NULL);
-    if (need_trust) {
-        merged_anchors(x, &ta, &ta_count);
-        if (!ta_count && !c->pinned)
-            return fail(c, OTERR_TRUSTSTORE, 0,
-                "No trusted certificates: install the CA bundle as ENVARC:OpenTLS/ca-bundle.pem.", NULL, NULL);
-    }
+    /* With no trust store the handshake still runs as far as the server's
+     * certificate, so that the caller can show it and offer to trust it
+     * (OT_GetPeerFingerprint, OT_GetPeerName); it then fails with
+     * OTERR_TRUSTSTORE unless the certificate is pinned. */
+    if (need_trust) merged_anchors(x, &ta, &ta_count);
     ot_glue_select(&c->impls, !(x->flags & OTCF_NO_OFFLOAD));
 
     br_ssl_client_zero(&c->cc);
@@ -918,6 +947,16 @@ LONG OT_GetPeerCertificate(struct OTConnection *c, APTR buffer, LONG length)
     if (length < (LONG)c->x509.leaf_len) return OTERR_ARGS;
     memcpy(buffer, c->x509.leaf, c->x509.leaf_len);
     return (LONG)c->x509.leaf_len;
+}
+
+CONST_STRPTR OT_GetPeerName(struct OTConnection *c)
+{
+    if (!c || !c->x509.have_fingerprint || !c->x509.leaf_ok) return (CONST_STRPTR)"";
+    if (!c->peer_name_done) {
+        ot_cert_name(c->x509.leaf, c->x509.leaf_len, c->peer_name, sizeof c->peer_name);
+        c->peer_name_done = 1;
+    }
+    return (CONST_STRPTR)c->peer_name;
 }
 
 LONG OT_Random(APTR buffer, LONG length)
