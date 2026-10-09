@@ -131,6 +131,13 @@ def run_client(args, env=None):
 
 
 def case(name, server, client_args, expect, env=None, host="localhost"):
+    try:
+        run_case(name, server, client_args, expect, env, host)
+    finally:
+        server.stop()
+
+
+def run_case(name, server, client_args, expect, env, host):
     for offload in (True, False):
         label = name + ("" if offload else " (no offload)")
         args = list(client_args) + ([] if offload else ["--no-offload"]) + [host, str(server.port)]
@@ -141,7 +148,6 @@ def case(name, server, client_args, expect, env=None, host="localhost"):
             print("FAIL %s: wanted %s\n%s" % (label, {k: expect[k] for k in bad}, out["_text"]))
         else:
             print("ok   %s" % label)
-    server.stop()
 
 
 CA = ["--ca", "root.pem", "--no-system"]
@@ -249,7 +255,11 @@ def main():
         port = open(portfile).read().strip()
         args = [FTPSGET, "--ca", "root.pem", "--transfers", "3"] + ([] if reuse else ["--no-reuse"]) + \
                ["localhost", port, "test", "test", "big.bin"]
-        p = subprocess.run(args, capture_output=True, text=True, timeout=120)
+        try:
+            p = subprocess.run(args, capture_output=True, text=True, timeout=120)
+        finally:
+            srv.terminate()
+            srv.wait()
         out = dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
         want_sum = 0
         for b in open("big.bin", "rb").read():
@@ -262,8 +272,6 @@ def main():
         else:
             good = out.get("result") == "fail" and out.get("data0.reply") == "522"
             label = "FTPS: a data connection without the session is refused (522)"
-        srv.terminate()
-        srv.wait()
         if good:
             print("ok   %s" % label)
         else:
