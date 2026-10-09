@@ -62,8 +62,17 @@ def make_pki():
     leaf("rsaleaf", ["rsa:2048"], "root", "localhost.ext", ("-days", "365"))
     leaf("nameonly", ec256, "inter", "nameonly.ext", ("-days", "365"))
     leaf("wrong", ec256, "inter", "wrong.ext", ("-days", "365"))
-    leaf("expired", ec256, "inter", "localhost.ext",
-         ("-not_before", "20200101000000Z", "-not_after", "20210101000000Z"))
+    # expired: "openssl x509 -not_before" needs OpenSSL 3.4, so sign it with "openssl ca", which
+    # takes fixed dates on every OpenSSL 3 (the CI runner has 3.0)
+    ext("ca.cnf", "[ca]\ndefault_ca=tca\n[tca]\ndatabase=index.txt\nnew_certs_dir=.\nserial=ca.serial\n"
+                  "default_md=sha256\npolicy=pol\nunique_subject=no\n[pol]\ncommonName=supplied\n")
+    ext("index.txt", "")
+    ext("ca.serial", "1000\n")
+    sh("openssl", "req", "-newkey", *ec256, "-nodes", "-keyout", "expired.key",
+       "-out", "expired.csr", "-subj", "/CN=expired")
+    sh("openssl", "ca", "-batch", "-notext", "-config", "ca.cnf", "-cert", "inter.pem", "-keyfile", "inter.key",
+       "-in", "expired.csr", "-out", "expired.pem", "-startdate", "20200101000000Z",
+       "-enddate", "20210101000000Z", "-extfile", "localhost.ext")
     sh("openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
        "-keyout", "self.key", "-out", "self.pem", "-days", "365", "-subj", "/CN=localhost",
        "-addext", "subjectAltName=DNS:localhost")
