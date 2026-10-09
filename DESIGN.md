@@ -180,7 +180,10 @@ in A0, as version 1's calls).
   has no P-256 scalar multiplication yet); an RSA-2048 server (ECDHE on
   P-256), 41 ms against 78 ms; a resumed handshake 1 to 5 ms. One
   opencrypto.library call costs about 1.5 microseconds on AC090. The GCC
-  6.5 build measures the same within the noise. 1 MB downloads (HTTPS and
+  6.5 build measures the same within the noise. With a real CA bundle
+  (121 certificates, 182 KB) the library's first handshake takes about
+  170 ms more, once: the store is read and kept for every program after.
+  1 MB downloads (HTTPS and
   three FTPS data connections) arrive whole and checked.
 - **Tests** (`ctest`): `test_opentls_units` checks every OpenCrypto table
   against BearSSL's own on random inputs; `tests/test_tls_local.py` runs

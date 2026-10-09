@@ -6,6 +6,7 @@
 #     BUILD  a build-amiga-tls.sh output folder (lib/opentls.library, tests/)
 #     LABEL  results go to LAB/../results/LABEL
 #   EXTRA_C="files" copied to SYS:Lab/; LAB_PRE="AmigaDOS lines" run first;
+#   BUNDLE=file: a real CA bundle as ca-bundle.pem (the test root then in certs/);
 #   REPEAT handshakes per timing (5); TIMEOUT seconds (1500); KEEP=1 leaves the lab running
 # Starts local test servers on this machine's loopback (openssl s_server on
 # 29443-29448 and 29456, tests/ftps_server.py on 29449 with passive ports
@@ -69,7 +70,15 @@ for f in "$D"/Lab/*.txt; do [ -e "$f" ] && mv "$f" "$D/Lab/archive/"; done
 cp "$BUILD/lib/opentls.library" "$D/Libs/opentls.library"
 cp "$BUILD/tests/OpenTLSClient" "$BUILD/tests/OpenTLSFTPSGet" "$D/Lab/"
 for f in ${EXTRA_C:-}; do cp "$f" "$D/Lab/"; done      # more programs for LAB_PRE
-cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"
+mkdir -p "$D/Prefs/Env-Archive/OpenTLS/certs"
+if [ -n "${BUNDLE:-}" ]; then   # a real CA bundle, the test root as a local addition
+    cp "$BUNDLE" "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"
+    cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem"
+else
+    cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"
+    [ -f "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" ] && \
+        mv "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" "$D/Lab/archive/test-root.pem.$(date +%s)"
+fi
 grep -q "^;BEGIN OpenTLS lab" "$D/S/User-Startup" || \
     printf ';BEGIN OpenTLS lab\nIf EXISTS SYS:Lab/Lab-Startup\n  Execute SYS:Lab/Lab-Startup\nEndIf\n;END OpenTLS lab\n' >> "$D/S/User-Startup"
 printf '; OpenTLS lab: after Workbench has loaded, the tests\nRun >NIL: Execute SYS:Lab/Lab-Later\n' > "$D/Lab/Lab-Startup"
