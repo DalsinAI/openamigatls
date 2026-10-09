@@ -32,3 +32,4 @@
     (APTR)LIB_OT_Random,
     (APTR)LIB_OT_Accelerated,
     (APTR)LIB_OT_GetErrorDetail,
+    (APTR)LIB_OT_GetPeerName,

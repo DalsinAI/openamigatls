@@ -34,15 +34,31 @@ OpenPuTTY's NTRU Prime / Curve25519 key exchange went from 11 s with
 PuTTY's own code on the old JIT to about 60 ms with OpenCrypto as x86
 code; DESIGN.md section 8 has the 68k figures and the tests.
 
+`opentls.library` 1.0 (9 October 2026): a TLS 1.2 client on BearSSL (MIT)
+with OpenCrypto doing the maths that the x86 or ARM64 cores can do on
+AmigaChrome. Certificate chains against a trust store
+(`ENVARC:OpenTLS/ca-bundle.pem`, `ENVARC:OpenTLS/certs/`), host names and
+IP addresses, SNI, ALPN, session resumption by session ID (FTPS data
+connections), verify modes and pinned certificates.
+`docs/AutoDocs-OpenTLS.md` is the API; DESIGN.md section 9 the design.
+
 ## Building and testing
 
     cmake -S . -B build && cmake --build build && ctest --test-dir build
-        the portable core on x86 cores: the published vectors
+        OpenTLS on the x86 or ARM64 cores against local servers (openssl
+        s_server, tests/ftps_server.py), and OpenCrypto: the published vectors
         (tests/test_ssh_primitives.c) and, with Python's cryptography
         package, random inputs against OpenSSL (tests/differential.py)
     tests/interop_putty.sh
         sntrup761 against PuTTY 0.85's own, both ways (PuTTY is fetched
         as its release tarball and checked against its SHA-256)
+    ./build-amiga-tls.sh
+        opentls.library and its Amiga test programs (OpenTLSClient,
+        OpenTLSFTPSGet), with the os32 GCC 16 stove; STOVE= another stove
+        (the os32 stove's GCC 6.5 builds it too), CPU=060 for the 68060
+    tests/lab/lab_amiga.sh LAB BUILD LABEL
+        the same programs on the Amiga, in a lab made with AmigaChrome's
+        scripts/lab_instance.py, against local test servers
     ./build-amiga.sh
         opencrypto.library and the Amiga tests (OpenCryptoLibTest,
         OpenCryptoVectors: the same vectors on the 68k; OpenCryptoBench:

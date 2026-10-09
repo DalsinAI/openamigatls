@@ -34,4 +34,5 @@ OT_GetPeerCertificate(connection,buffer,length)(a0/a1/d0)
 OT_Random(buffer,length)(a0/d0)
 OT_Accelerated()()
 OT_GetErrorDetail(connection)(a0)
+OT_GetPeerName(connection)(a0)
 ##end

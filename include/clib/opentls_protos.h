@@ -38,5 +38,6 @@ LONG OT_GetPeerCertificate(struct OTConnection *connection, APTR buffer, LONG le
 LONG OT_Random(APTR buffer, LONG length);
 ULONG OT_Accelerated(VOID);
 LONG OT_GetErrorDetail(struct OTConnection *connection);
+CONST_STRPTR OT_GetPeerName(struct OTConnection *connection);
 
 #endif

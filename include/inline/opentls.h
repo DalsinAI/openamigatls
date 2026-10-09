@@ -106,4 +106,7 @@
 #define OT_GetErrorDetail(connection) \
 	LP1(0xd8, LONG, OT_GetErrorDetail, struct OTConnection *, connection, a0, , OPENTLS_BASE_NAME)
 
+#define OT_GetPeerName(connection) \
+	LP1(0xde, CONST_STRPTR, OT_GetPeerName, struct OTConnection *, connection, a0, , OPENTLS_BASE_NAME)
+
 #endif
