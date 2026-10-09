@@ -42,10 +42,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## The CA bundle (not in this repository)
+## The CA bundle (made by tools/make_ca_bundle.py, not in this repository)
 
-The trust store OpenTLS reads (`ENVARC:OpenTLS/ca-bundle.pem`) is meant to
-carry Mozilla's CA list, which is under the Mozilla Public License 2.0
-(file-level copyleft: the bundle ships as its own file, with its licence
-and source named, beside MIT-licensed OpenTLS). Which bundle an install
-carries, and where it comes from, is not settled by this repository.
+The trust store OpenTLS reads (`ENVARC:OpenTLS/ca-bundle.pem`) carries
+Mozilla's CA list (the NSS root store, `certdata.txt`, "Copyright Mozilla
+Contributors"), under the Mozilla Public License 2.0. `tools/make_ca_bundle.py`
+makes it from a Debian or Ubuntu `ca-certificates` package's own
+`/usr/share/ca-certificates/mozilla/*.crt` and nothing else (it refuses files
+the package does not own, and a package whose files differ from what dpkg
+installed), and writes `ca-bundle.LICENSE` beside it: the package version,
+the day, the certificates, where the source is, and the licence's text. The
+bundle ships as its own file next to MIT-licensed OpenTLS (the MPL is a
+file-level copyleft). OpenUp's OpenTLS part carries both.

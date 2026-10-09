@@ -185,7 +185,7 @@ int ot_trust_location(int kind, int i, char *buf, size_t size)
 {
     static const char *const bundles[] = {
         "ENV:OpenTLS/ca-bundle.pem", "ENVARC:OpenTLS/ca-bundle.pem", NULL };
-    static const char *const dirs[] = { "ENV:OpenTLS/certs", NULL };
+    static const char *const dirs[] = { "ENV:OpenTLS/certs", "ENVARC:OpenTLS/certs", NULL };
     static const char *const fallbacks[] = {
         "DEVS:Internet/curl-ca-bundle.crt", "AmiSSL:Certs/ca-bundle.crt", NULL };
     const char *const *list = kind == OT_TRUST_BUNDLE ? bundles

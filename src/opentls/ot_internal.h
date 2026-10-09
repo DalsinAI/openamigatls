@@ -16,7 +16,7 @@
 #include "bearssl.h"
 
 #define OT_LIB_VERSION   1
-#define OT_LIB_REVISION  1          /* 1.1: OT_GetPeerName */
+#define OT_LIB_REVISION  2          /* 1.1: OT_GetPeerName; 1.2: ENVARC:OpenTLS/certs/ too */
 
 #define OT_HOST_MAX      255
 #define OT_ALPN_MAX      8          /* protocols offered at once */

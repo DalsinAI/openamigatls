@@ -1,4 +1,4 @@
-/* opentls.library 1.1: a TLS client for AmigaOS 3.x, on BearSSL
+/* opentls.library 1.2: a TLS client for AmigaOS 3.x, on BearSSL
  * (third_party/bearssl, MIT) with OpenCrypto doing the maths that the x86
  * or ARM64 cores can do on AmigaChrome (src/opentls/ot_glue.c).
  * docs/AutoDocs-OpenTLS.md is the contract.
@@ -29,7 +29,7 @@ int start(void) { return -1; }
 
 static const char lib_name[] = OPENTLSLIB_NAME;
 static const char lib_id[] =
-    "opentls.library 1.1 (9.10.2026) OpenTLS on BearSSL, Dalsin Limited\r\n";
+    "opentls.library 1.2 (9.10.2026) OpenTLS on BearSSL, Dalsin Limited\r\n";
 
 static struct Library *lib_init(REG(d0, struct OpenTLSLibBase *base),
                                 REG(a0, BPTR seglist),

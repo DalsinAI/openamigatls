@@ -56,6 +56,10 @@ connections), verify modes and pinned certificates.
         opentls.library and its Amiga test programs (OpenTLSClient,
         OpenTLSFTPSGet), with the os32 GCC 16 stove; STOVE= another stove
         (the os32 stove's GCC 6.5 builds it too), CPU=060 for the 68060
+    tools/make_ca_bundle.py OUTDIR
+        ca-bundle.pem and ca-bundle.LICENSE for ENVARC:OpenTLS/: Mozilla's
+        CA list from this machine's ca-certificates package (MPL-2.0), and
+        nothing else
     tests/lab/lab_amiga.sh LAB BUILD LABEL
         the same programs on the Amiga, in a lab made with AmigaChrome's
         scripts/lab_instance.py, against local test servers
