@@ -3,3 +3,6 @@ build-amiga/
 build-cm/
 build-host/
 build-interop/
+build-dbg/
+build-amiga-tls*/
+build-amiga-tls*.log

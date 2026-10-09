@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes opentls.library's call headers from one table: clib/opentls_protos.h,
-inline/opentls.h (GCC), fd/opentls_lib.fd and the library's vector list
-(library/ot_vectors.h). The table is API version 1, frozen 9 Oct 2026:
+inline/opentls.h (GCC), fd/opentls_lib.fd, and the library's register entry
+points and vector list (library/ot_entries.h, library/ot_vectors.h). The table is API version 1, frozen 9 Oct 2026:
 new calls go at the end, nothing above them moves.
 MIT, Copyright (c) 2026 Dalsin Limited."""
 import os, sys
@@ -79,6 +79,16 @@ def main(root):
     os.makedirs(os.path.join(root, "library"), exist_ok=True)
     with open(os.path.join(root, "library", "ot_vectors.h"), "w") as fh:
         fh.write("".join(v))
+    e = [head, "/* opentls.library's entry points: registers in, the C calls of\n"
+               " * src/opentls/ot_core.c out. Included by library/opentls_lib.c. */\n"]
+    for name, rt, args in CALLS:
+        params = ["REG(%s, %s%s%s)" % (r, t, "" if t.endswith("*") else " ", n) for t, n, r in args]
+        params.append("REG(a6, struct Library *base)")
+        call = "%s(%s)" % (name, ", ".join(n for t, n, r in args))
+        body = "(void)base; %s%s;" % ("" if rt == "VOID" else "return ", call)
+        e.append("static %s LIB_%s(%s)\n{ %s }\n" % (rt, name, ", ".join(params), body))
+    with open(os.path.join(root, "library", "ot_entries.h"), "w") as fh:
+        fh.write("".join(e))
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
