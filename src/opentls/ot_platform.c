@@ -183,9 +183,13 @@ int ot_platform_entropy(unsigned char *out, size_t len)
 
 int ot_trust_location(int kind, int i, char *buf, size_t size)
 {
+    /* The bundle lives in S: (OpenUp's OpenTLS part): in ENVARC: it would be
+     * copied into ENV:, in RAM, at every boot. ENVARC:OpenTLS/ca-bundle.pem
+     * is read only when S: has none. The user's own CAs are read straight
+     * from ENVARC:, so they work before the next boot copies them. */
     static const char *const bundles[] = {
-        "ENV:OpenTLS/ca-bundle.pem", "ENVARC:OpenTLS/ca-bundle.pem", NULL };
-    static const char *const dirs[] = { "ENV:OpenTLS/certs", NULL };
+        "S:OpenTLS/ca-bundle.pem", "ENVARC:OpenTLS/ca-bundle.pem", NULL };
+    static const char *const dirs[] = { "ENVARC:OpenTLS/certs", NULL };
     static const char *const fallbacks[] = {
         "DEVS:Internet/curl-ca-bundle.crt", "AmiSSL:Certs/ca-bundle.crt", NULL };
     const char *const *list = kind == OT_TRUST_BUNDLE ? bundles
@@ -310,7 +314,7 @@ int ot_platform_entropy(unsigned char *out, size_t len)
     return got == len;
 }
 
-/* OPENTLS_ROOT stands in for ENV:OpenTLS in the host tests. */
+/* OPENTLS_ROOT stands in for S:OpenTLS and ENVARC:OpenTLS in the host tests. */
 int ot_trust_location(int kind, int i, char *buf, size_t size)
 {
     const char *root = getenv("OPENTLS_ROOT");

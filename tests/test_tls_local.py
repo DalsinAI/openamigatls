@@ -225,7 +225,7 @@ def main():
     case("small buffers", Server("ecleaf"), CA + get + ["--small"], {"result": "ok"})
     case("1 MB download", Server("ecleaf", www="-WWW"), CA + ["--send", "GET /big.bin HTTP/1.0\\r\\n\\r\\n"],
          {"result": "ok", "conn0.received": str((1 << 20) + len(WWW_HEADER))})
-    # the system trust store: OPENTLS_ROOT stands in for ENV:OpenTLS
+    # the system trust store: OPENTLS_ROOT stands in for S:OpenTLS and ENVARC:OpenTLS
     root = os.path.join(WORK, "envroot")
     os.makedirs(os.path.join(root, "certs"), exist_ok=True)
     with open(os.path.join(root, "ca-bundle.pem"), "w") as f:

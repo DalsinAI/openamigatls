@@ -63,12 +63,18 @@ readable with `OT_GetPeerFingerprint()`, `OT_GetPeerCertificate()` and
 
 Unless `OTCF_NO_SYSTEM_TRUST` is set, a context trusts:
 
-1. `ENV:OpenTLS/ca-bundle.pem`, or if that is missing
-   `ENVARC:OpenTLS/ca-bundle.pem`: the CA bundle (PEM certificates). The
-   OpenTLS install carries Mozilla's CA list there (MPL-2.0, from Mozilla's
-   `certdata.txt`).
-2. every `*.pem` file in `ENV:OpenTLS/certs/` (or `ENVARC:OpenTLS/certs/`):
-   local additions, e.g. a home server's own CA.
+1. `S:OpenTLS/ca-bundle.pem`, or if that is missing
+   `ENVARC:OpenTLS/ca-bundle.pem`: the CA bundle (PEM certificates).
+   OpenUp's OpenTLS part puts Mozilla's CA list in `S:OpenTLS/`, made with
+   `tools/make_ca_bundle.py` from a `ca-certificates` package (the package
+   version and the day are in its first lines), with
+   `S:OpenTLS/ca-bundle.LICENSE` beside it: Mozilla's list is under the
+   Mozilla Public License 2.0. An upgrade replaces the bundle. It is in S:,
+   not ENVARC:, because the OS copies ENVARC: into ENV:, in RAM, at every
+   boot.
+2. every `*.pem` file in `ENVARC:OpenTLS/certs/`: local additions, e.g. a
+   home server's own CA. Read from ENVARC: itself, so a certificate added
+   there works at once, without a reboot. Upgrades leave them alone.
 3. only when (1) is missing: `DEVS:Internet/curl-ca-bundle.crt`, then
    `AmiSSL:Certs/ca-bundle.crt`.
 

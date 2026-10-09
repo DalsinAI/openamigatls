@@ -1,5 +1,5 @@
 /* OpenTLS: trust anchors from PEM certificates, and the system trust store
- * (ENV:OpenTLS/ca-bundle.pem and ENV:OpenTLS/certs/, docs/AutoDocs-OpenTLS.md),
+ * (S:OpenTLS/ca-bundle.pem and ENVARC:OpenTLS/certs/, docs/AutoDocs-OpenTLS.md),
  * loaded once and shared by every context.
  * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
 #include "ot_internal.h"
@@ -197,8 +197,9 @@ const struct ot_anchors *ot_system_anchors(void)
         if (!have_bundle)
             for (i = 0; ot_trust_location(OT_TRUST_FALLBACK, i, path, sizeof path); ++i)
                 if (ot_anchors_add_file(&ot_sys, path) > 0) break;
+        /* the first directory of local additions with certificates in it */
         for (i = 0; ot_trust_location(OT_TRUST_DIR, i, path, sizeof path); ++i)
-            ot_each_file(path, ".pem", add_dir_file, &ot_sys);
+            if (ot_each_file(path, ".pem", add_dir_file, &ot_sys) > 0) break;
     }
     ot_unlock(ot_sys_lock);
     return ot_sys.count ? &ot_sys : NULL;

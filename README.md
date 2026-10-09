@@ -37,7 +37,7 @@ code; DESIGN.md section 8 has the 68k figures and the tests.
 `opentls.library` 1.0 (9 October 2026): a TLS 1.2 client on BearSSL (MIT)
 with OpenCrypto doing the maths that the x86 or ARM64 cores can do on
 AmigaChrome. Certificate chains against a trust store
-(`ENVARC:OpenTLS/ca-bundle.pem`, `ENVARC:OpenTLS/certs/`), host names and
+(`S:OpenTLS/ca-bundle.pem`, local additions in `ENVARC:OpenTLS/certs/`), host names and
 IP addresses, SNI, ALPN, session resumption by session ID (FTPS data
 connections), verify modes and pinned certificates.
 `docs/AutoDocs-OpenTLS.md` is the API; DESIGN.md section 9 the design.
@@ -56,6 +56,10 @@ connections), verify modes and pinned certificates.
         opentls.library and its Amiga test programs (OpenTLSClient,
         OpenTLSFTPSGet), with the os32 GCC 16 stove; STOVE= another stove
         (the os32 stove's GCC 6.5 builds it too), CPU=060 for the 68060
+    tools/make_ca_bundle.py OUTDIR
+        ca-bundle.pem and ca-bundle.LICENSE for S:OpenTLS/: Mozilla's
+        CA list from this machine's ca-certificates package (MPL-2.0), and
+        nothing else
     tests/lab/lab_amiga.sh LAB BUILD LABEL
         the same programs on the Amiga, in a lab made with AmigaChrome's
         scripts/lab_instance.py, against local test servers
