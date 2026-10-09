@@ -3,7 +3,11 @@
 #   STOVE    the stove (default ~/AmigaChrome/stoves/os32-gcc16; the GCC 6.5
 #            os32 stove builds it too)
 #   CPU      020 (default: 68020 to 68060) or 060 (no 64-bit multiplies:
-#            BearSSL's 15-bit maths, as the 68060 traps them)
+#            BearSSL's 15-bit maths, as the 68060 traps them). GCC 16 with
+#            -m68060 reads the high word of 64-bit values from the wrong stack
+#            slot (found 9 Oct 2026, both GCC 16 stoves): CPU=060 is refused
+#            with GCC 16 unless ALLOW_GCC16_060=1 (not for shipping); GCC 6.5
+#            (the os32 stove) is right
 #   OUT      the output directory (default build-amiga-tls)
 #   EXTRA_CFLAGS  more compiler flags (e.g. -DOT_GLUE_MASK=1: measuring
 #            with some operations left to BearSSL; OTACC_* bits)
@@ -27,6 +31,11 @@ case "${CPU:-020}" in
     *) echo "CPU is 020 or 060"; exit 2 ;;
 esac
 
+if [ "${CPU:-020}" = 060 ] && "$CC" -dumpversion | grep -q '^16' && [ "${ALLOW_GCC16_060:-}" != 1 ]; then
+    echo "CPU=060 with GCC 16 is refused: it miscompiles 64-bit values at -m68060."
+    echo "Use the os32 stove (GCC 6.5) for a 68060 build, or CPU=020."
+    exit 2
+fi
 mkdir -p "$OUT/lib" "$OUT/tests" "$OUT/obj/bearssl" "$OUT/include"
 cp -r "$HERE/include/libraries" "$HERE/include/proto" "$HERE/include/inline" \
       "$HERE/include/clib" "$HERE/include/fd" "$OUT/include/"

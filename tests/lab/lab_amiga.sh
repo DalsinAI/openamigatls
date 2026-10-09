@@ -6,13 +6,14 @@
 #     BUILD  a build-amiga-tls.sh output folder (lib/opentls.library, tests/)
 #     LABEL  results go to LAB/../results/LABEL
 #   EXTRA_C="files" copied to SYS:Lab/; LAB_PRE="AmigaDOS lines" run first;
-#   BUNDLE=file: a real CA bundle as ca-bundle.pem (the test root then in certs/);
+#   BUNDLE=file: a real CA bundle as S:OpenTLS/ca-bundle.pem (the test root then in
+#   ENVARC:OpenTLS/certs/); BUNDLE=none: no bundle (LAB_PRE installs one);
 #   REPEAT handshakes per timing (5); TIMEOUT seconds (1500); KEEP=1 leaves the lab running
 # Starts local test servers on this machine's loopback (openssl s_server on
 # 29443-29448 and 29456, tests/ftps_server.py on 29449 with passive ports
 # 29450-29455;
 # the PKI from tests/test_tls_local.py), installs the library, the test
-# programs and the test root as ENVARC:OpenTLS/ca-bundle.pem on the lab's
+# programs and the test root as S:OpenTLS/ca-bundle.pem on the lab's
 # DH0, runs SYS:Lab/Lab-Later after Workbench, collects SYS:Lab/*.txt, then
 # stops the lab and the servers. tests/lab/pyhook gives the lab's Amiga its
 # way to those ports (OPENTLS_LAB_PORTS); nothing deployed is changed.
@@ -70,15 +71,21 @@ for f in "$D"/Lab/*.txt; do [ -e "$f" ] && mv "$f" "$D/Lab/archive/"; done
 cp "$BUILD/lib/opentls.library" "$D/Libs/opentls.library"
 cp "$BUILD/tests/OpenTLSClient" "$BUILD/tests/OpenTLSFTPSGet" "$D/Lab/"
 for f in ${EXTRA_C:-}; do cp "$f" "$D/Lab/"; done      # more programs for LAB_PRE
-mkdir -p "$D/Prefs/Env-Archive/OpenTLS/certs"
-if [ -n "${BUNDLE:-}" ]; then   # a real CA bundle, the test root as a local addition
-    cp "$BUNDLE" "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"
-    cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem"
-else
-    cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"
-    [ -f "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" ] && \
-        mv "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" "$D/Lab/archive/test-root.pem.$(date +%s)"
-fi
+mkdir -p "$D/S/OpenTLS" "$D/Prefs/Env-Archive/OpenTLS/certs"
+keep_aside() { [ -e "$1" ] && mv "$1" "$D/Lab/archive/$(basename "$1").$(date +%Y%m%dT%H%M%S)"; return 0; }
+keep_aside "$D/Prefs/Env-Archive/OpenTLS/ca-bundle.pem"   # where labs before 1.2 put it
+keep_aside "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem"
+case "${BUNDLE:-}" in
+    "")   # the test root as the bundle
+        cp "$PKI/root.pem" "$D/S/OpenTLS/ca-bundle.pem" ;;
+    none) # no bundle: an OpenTLS part installed in LAB_PRE brings one; the test root as a local addition
+        keep_aside "$D/S/OpenTLS/ca-bundle.pem"
+        keep_aside "$D/S/OpenTLS/ca-bundle.LICENSE"
+        cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" ;;
+    *)    # a real CA bundle, the test root as a local addition
+        cp "$BUNDLE" "$D/S/OpenTLS/ca-bundle.pem"
+        cp "$PKI/root.pem" "$D/Prefs/Env-Archive/OpenTLS/certs/test-root.pem" ;;
+esac
 grep -q "^;BEGIN OpenTLS lab" "$D/S/User-Startup" || \
     printf ';BEGIN OpenTLS lab\nIf EXISTS SYS:Lab/Lab-Startup\n  Execute SYS:Lab/Lab-Startup\nEndIf\n;END OpenTLS lab\n' >> "$D/S/User-Startup"
 printf '; OpenTLS lab: after Workbench has loaded, the tests\nRun >NIL: Execute SYS:Lab/Lab-Later\n' > "$D/Lab/Lab-Startup"
@@ -94,7 +101,6 @@ GET='--send "GET / HTTP/1.0\r\n\r\n"'
     echo '  Break $obk'
     echo 'EndIf'
     echo "Date >SYS:Lab/times.txt"
-    echo "Copy ENVARC:OpenTLS ENV:OpenTLS ALL QUIET"
     printf '%s\n' "${LAB_PRE:-}"
     echo "$C >SYS:Lab/resume.txt $GET --expect TLSv1.2 --connections 3 localhost 29443"
     echo "$C >SYS:Lab/resume-nooffload.txt $GET --expect TLSv1.2 --connections 3 --no-offload localhost 29443"

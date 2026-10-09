@@ -260,7 +260,7 @@ static LONG engine_error(struct OTConnection *c, int err)
     } else if (err == BR_ERR_X509_NOT_TRUSTED) {
         if (!c->ctx->merged_count)
             ot_set_error(c, OTERR_TRUSTSTORE, err,
-                "No trusted certificates: install the CA bundle as ENVARC:OpenTLS/ca-bundle.pem.", NULL, NULL);
+                "No trusted certificates: install the CA bundle as S:OpenTLS/ca-bundle.pem.", NULL, NULL);
         else
             cert_error(c, OTERR_UNTRUSTED, err);
     } else if (err == OT_X509_PINNED) {

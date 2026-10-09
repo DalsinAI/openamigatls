@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes OpenTLS's CA bundle (ENVARC:OpenTLS/ca-bundle.pem) and its licence
+"""Makes OpenTLS's CA bundle (S:OpenTLS/ca-bundle.pem) and its licence
 note from Mozilla's CA list as a Debian or Ubuntu ca-certificates package
 installs it, and from nothing else.
 

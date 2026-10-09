@@ -44,7 +44,7 @@ SOFTWARE.
 
 ## The CA bundle (made by tools/make_ca_bundle.py, not in this repository)
 
-The trust store OpenTLS reads (`ENVARC:OpenTLS/ca-bundle.pem`) carries
+The trust store OpenTLS reads (`S:OpenTLS/ca-bundle.pem`) carries
 Mozilla's CA list (the NSS root store, `certdata.txt`, "Copyright Mozilla
 Contributors"), under the Mozilla Public License 2.0. `tools/make_ca_bundle.py`
 makes it from a Debian or Ubuntu `ca-certificates` package's own
