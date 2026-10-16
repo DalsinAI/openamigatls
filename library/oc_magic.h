@@ -2,7 +2,7 @@
  * ours that AC090 (AmigaChrome's 68k core) runs as host code, and that
  * runs as its own 68k code everywhere else (a real Amiga, a PiStorm,
  * another emulator).
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * The tag is AmigaChrome's published one (amigachrome-guest
  * common/amiga/ac_magic.h, version 1): the function's entry is

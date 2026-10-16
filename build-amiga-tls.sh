@@ -17,7 +17,7 @@
 #               set (the GCC 16 -m68040 FPCR clash; the build uses no FPU)
 # Outputs: lib/opentls.library, tests/OpenTLSClient, tests/OpenTLSFTPSGet,
 # and the headers under include/.
-# MIT licensed and free. Copyright (c) 2026 Dalsin Limited.
+# MIT licensed and free. Copyright (c) 2026 AmigaChrome Team.
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

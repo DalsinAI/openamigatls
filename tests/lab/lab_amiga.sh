@@ -18,7 +18,7 @@
 # stops the lab and the servers. tests/lab/pyhook gives the lab's Amiga its
 # way to those ports (OPENTLS_LAB_PORTS); nothing deployed is changed.
 # Nothing is deleted: earlier results go to archive/.
-# MIT licensed and free. Copyright (c) 2026 Dalsin Limited.
+# MIT licensed and free. Copyright (c) 2026 AmigaChrome Team.
 set -u
 LAB=$(readlink -f "${1:?usage: lab_amiga.sh LAB BUILD LABEL}")
 BUILD=$(readlink -f "${2:?}")

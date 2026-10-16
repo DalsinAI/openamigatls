@@ -9,7 +9,7 @@
  * connection's resumed flag, byte count and a checksum.
  * Same source on the x86 or ARM64 cores and on the Amiga (OpenTLSFTPSGet).
  *
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

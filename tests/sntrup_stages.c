@@ -1,7 +1,7 @@
 /* sntrup761's stages, one hash each, for comparing two machines (the PC
  * and the 68k): the same output means the same arithmetic.
  *   sntrup_stages > out.txt   (on both, then diff)
- * Copyright (c) 2026 Dalsin Limited. MIT. */
+ * Copyright (c) 2026 AmigaChrome Team. MIT. */
 #include <stdio.h>
 #ifdef __amigaos__
 #include <proto/exec.h>

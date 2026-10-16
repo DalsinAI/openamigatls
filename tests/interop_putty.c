@@ -2,7 +2,7 @@
  * itself interoperable with OpenSSH), on the PC: each side's key pair with
  * the other side's encapsulation, the shared secrets compared.
  *   tests/interop_putty.sh builds it against a PuTTY build tree.
- * Copyright (c) 2026 Dalsin Limited. MIT. PuTTY is MIT, Simon Tatham et al. */
+ * Copyright (c) 2026 AmigaChrome Team. MIT. PuTTY is MIT, Simon Tatham et al. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,5 +1,5 @@
 /* OpenCrypto: X25519 (RFC 7748), constant time.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * The Montgomery ladder over the u coordinate, 255 steps whatever the
  * scalar, with conditional swaps by mask (no branch on a secret bit). */

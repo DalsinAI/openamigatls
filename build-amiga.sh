@@ -9,7 +9,7 @@
 # Outputs: lib/opencrypto.library, tests/OpenCryptoLibTest (version 1's
 # calls), tests/OpenCryptoVectors (the published vectors, as on the PC),
 # tests/OpenCryptoBench (version 2's calls, checked and timed).
-# MIT, Copyright (c) 2026 Dalsin Limited.
+# MIT, Copyright (c) 2026 AmigaChrome Team.
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

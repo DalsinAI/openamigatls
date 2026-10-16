@@ -2,7 +2,7 @@
  * the Amiga. Prints which run as host code (OC_Accelerated), then for each
  * operation a check against a fixed answer and its time.
  *   OpenCryptoBench [ROUNDS]
- * Copyright (c) 2026 Dalsin Limited. MIT. */
+ * Copyright (c) 2026 AmigaChrome Team. MIT. */
 #include <exec/types.h>
 #include <exec/libraries.h>
 #include <devices/timer.h>

@@ -5,7 +5,7 @@ Poly1305, AES (CTR, CBC, ECB; 128, 192, 256), RSA's public operation
 (2048, 3072, 4096 bits), ECDSA (P-256, P-384, P-521; good and altered),
 SHA-256, SHA-512, and sntrup761 round trips.
   python3 tests/differential.py OC_CLI [ROUNDS]
-Copyright (c) 2026 Dalsin Limited. MIT."""
+Copyright (c) 2026 AmigaChrome Team. MIT."""
 import hashlib, os, random, subprocess, sys
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa, x25519, utils

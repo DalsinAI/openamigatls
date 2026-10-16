@@ -1,7 +1,7 @@
 /* OpenTLS: memory, locks, files, the clock and socket I/O, on AmigaOS
  * (exec, dos, bsdsocket through the caller's SocketBase) and on the x86 or
  * ARM64 cores for the host tests (POSIX).
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
 
 #ifdef __amigaos__

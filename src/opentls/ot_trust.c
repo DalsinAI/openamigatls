@@ -1,7 +1,7 @@
 /* OpenTLS: trust anchors from PEM certificates, and the system trust store
  * (S:OpenTLS/ca-bundle.pem and ENVARC:OpenTLS/certs/, docs/AutoDocs-OpenTLS.md),
  * loaded once and shared by every context.
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
 
 struct growbuf {

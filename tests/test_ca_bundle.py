@@ -3,7 +3,7 @@
 opentls_client loading the bundle: every certificate in it must become a
 trust anchor. Skipped (exit 0, "SKIP") without the package.
   test_ca_bundle.py opentls_client OUTDIR
-MIT licensed and free. Copyright (c) 2026 Dalsin Limited."""
+MIT licensed and free. Copyright (c) 2026 AmigaChrome Team."""
 import os
 import subprocess
 import sys
