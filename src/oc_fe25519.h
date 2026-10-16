@@ -1,6 +1,6 @@
 /* OpenCrypto: arithmetic in GF(2^255 - 19), shared by X25519 and Ed25519.
  * Internal to OpenCrypto (each user includes it once).
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Sixteen limbs of 16 bits, signed, as TweetNaCl lays them out, kept in
  * 32-bit ints between operations; a product is summed in 64 bits. Every

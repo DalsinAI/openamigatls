@@ -2,7 +2,7 @@
  * curves P-256, P-384 and P-521, for checking SSH host keys and
  * certificates. Both handle public values only (a public key, a signature,
  * a hash), so they are written for clarity, not constant time.
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Numbers are arrays of 32-bit limbs, least significant first; products
  * modulo an odd number use Montgomery's method (CIOS). */

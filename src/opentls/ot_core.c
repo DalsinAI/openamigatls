@@ -1,7 +1,7 @@
 /* OpenTLS: the calls of opentls.library (docs/AutoDocs-OpenTLS.md), over
  * BearSSL's client engine. The library (library/opentls_lib.c) calls these
  * from its register entry points; the host tests call them directly.
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
 #include "inner.h"      /* BearSSL's br_ssl_engine_fail() */
 #include <clib/opentls_protos.h>

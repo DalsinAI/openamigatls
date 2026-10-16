@@ -1,4 +1,4 @@
-/* Host build of OpenTLS. MIT, Copyright (c) 2026 Dalsin Limited. */
+/* Host build of OpenTLS. MIT, Copyright (c) 2026 AmigaChrome Team. */
 #ifndef EXEC_LIBRARIES_H
 #define EXEC_LIBRARIES_H
 #include <exec/types.h>

@@ -3,7 +3,7 @@
  * promises on top: the server's certificate and its SHA-256 fingerprint
  * kept for the caller, pinned certificates, the verify modes, and
  * certificates for IP addresses (which the minimal engine does not match).
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
 
 /* ---- a small DER reader, for the subjectAltName and CN ---- */

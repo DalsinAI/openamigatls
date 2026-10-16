@@ -2,7 +2,7 @@
 #define LIBRARIES_OPENTLS_H
 /*
  * opentls.library: a TLS client for AmigaOS 3.x.
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited.
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team.
  *
  * API version 1, frozen 9 October 2026. Later versions only add: new
  * functions at the end of the table, new constants, and new fields at the

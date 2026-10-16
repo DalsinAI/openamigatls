@@ -1,6 +1,6 @@
 #ifndef PROTO_OPENTLS_H
 #define PROTO_OPENTLS_H
-/* opentls.library. MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+/* opentls.library. MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 
 #include <exec/types.h>
 #include <exec/libraries.h>

@@ -9,7 +9,7 @@ Local only: it listens on 127.0.0.1.
                  [--port N] [--pasv-ports FIRST-LAST]
 
 Writes the port it listens on to PORTFILE, then serves until killed.
-MIT licensed and free. Copyright (c) 2026 Dalsin Limited."""
+MIT licensed and free. Copyright (c) 2026 AmigaChrome Team."""
 import os
 import socket
 import ssl

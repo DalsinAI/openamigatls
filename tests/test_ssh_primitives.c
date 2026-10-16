@@ -15,7 +15,7 @@
  *                 round trip
  *   RSA           a 2048-bit public operation against Python's pow()
  *   ECDSA         a P-256 signature from RFC 6979 section A.2.5
- * Copyright (c) 2026 Dalsin Limited. MIT. */
+ * Copyright (c) 2026 AmigaChrome Team. MIT. */
 #include "opencrypto/opencrypto.h"
 #include "vectors.h"
 

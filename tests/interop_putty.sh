@@ -4,7 +4,7 @@
 # but built from its release tarball, checked against its SHA-256:
 #   PUTTY_TARBALL  putty-0.85.tar.gz (default: fetched from the.earth.li)
 #   WORK           where to build (default build-interop)
-# MIT, Copyright (c) 2026 Dalsin Limited.
+# MIT, Copyright (c) 2026 AmigaChrome Team.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WORK=${WORK:-"$HERE/build-interop"}

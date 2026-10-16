@@ -2,7 +2,7 @@
  * from the platform: on AmigaOS from the jitter between the E-clock and
  * the scheduler, sampled many times and hashed; in the host tests from
  * /dev/urandom. Fresh samples are mixed in at every call.
- * MIT licensed and free. Copyright (c) 2026 Dalsin Limited. */
+ * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
 
 #ifdef __amigaos__

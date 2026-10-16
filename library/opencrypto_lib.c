@@ -1,5 +1,5 @@
 /* opencrypto.library 2.0
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Version 2 (8 Oct 2026) adds what SSH needs: X25519, sntrup761, Ed25519,
  * RSA and ECDSA verification, SHA-2 block runs, ChaCha20, Poly1305 and
@@ -31,7 +31,7 @@ int start(void) { return -1; }
 
 static const char lib_name[] = OPENCRYPTOLIB_NAME;
 static const char lib_id[] =
-    "opencrypto.library 2.0 (8.10.2026) OpenCrypto, Dalsin Limited\r\n";
+    "opencrypto.library 2.0 (8.10.2026) OpenCrypto, AmigaChrome Team\r\n";
 
 static struct Library *lib_init(REG(d0, struct OpenCryptoLibBase *base),
                                 REG(a0, BPTR seglist),

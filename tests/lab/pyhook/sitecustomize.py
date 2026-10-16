@@ -6,7 +6,7 @@ adds entries to that table for the ports in OPENTLS_LAB_PORTS
 It is loaded through PYTHONPATH, which lab_instance.py's --env passes to the
 lab's host and bridge only; the deployed files are not changed. Nothing
 else in the network policy changes.
-MIT licensed and free. Copyright (c) 2026 Dalsin Limited."""
+MIT licensed and free. Copyright (c) 2026 AmigaChrome Team."""
 import importlib.abc
 import importlib.machinery
 import os

@@ -14,7 +14,7 @@ the package's files do not match what dpkg installed (dpkg --verify), when
 a file there is not owned by the package, or when a certificate does not
 parse. The bundle names the package version and the day it was made.
 
-MIT licensed and free. Copyright (c) 2026 Dalsin Limited. The certificates
+MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. The certificates
 are Mozilla's, under the Mozilla Public License 2.0 (ca-bundle.LICENSE)."""
 import argparse
 import base64

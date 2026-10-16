@@ -7,7 +7,7 @@ with OpenCrypto doing the maths and again with OTCF_NO_OFFLOAD.
 
   test_tls_local.py opentls_client opentls_ftps_get
 
-MIT licensed and free. Copyright (c) 2026 Dalsin Limited."""
+MIT licensed and free. Copyright (c) 2026 AmigaChrome Team."""
 import os
 import socket
 import subprocess

@@ -2,7 +2,7 @@
  * sntrup761x25519-sha512 key exchange (as OpenSSH and PuTTY have it:
  * NTRU Prime round 3, with the 32-byte confirmation hash on the
  * ciphertext and implicit rejection).
- * Copyright (c) 2026 Dalsin Limited. MIT.
+ * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Written from the NTRU Prime specification (round 3, sections 3 and 4):
  * the ring Z[x]/(x^p - x - 1), q = 4591, weight w = 286; reciprocals by

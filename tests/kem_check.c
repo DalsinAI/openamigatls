@@ -1,6 +1,6 @@
 /* sntrup761 through its public calls only (the file compiled on its own),
  * hashes printed for comparing machines.
- * Copyright (c) 2026 Dalsin Limited. MIT. */
+ * Copyright (c) 2026 AmigaChrome Team. MIT. */
 #include <stdio.h>
 #include <string.h>
 #include "opencrypto/opencrypto.h"
