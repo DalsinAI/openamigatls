@@ -55,7 +55,8 @@ connections), verify modes and pinned certificates.
     ./build-amiga-tls.sh
         opentls.library and its Amiga test programs (OpenTLSClient,
         OpenTLSFTPSGet), with the os32 GCC 16 stove; STOVE= another stove
-        (the os32 stove's GCC 6.5 builds it too), CPU=060 for the 68060
+        (the os32 stove's GCC 6.5 builds it too); 68040 code, CPU=060 for
+        the 68060
     tools/make_ca_bundle.py OUTDIR
         ca-bundle.pem and ca-bundle.LICENSE for S:OpenTLS/: Mozilla's
         CA list from this machine's ca-certificates package (MPL-2.0), and
@@ -66,7 +67,8 @@ connections), verify modes and pinned certificates.
     ./build-amiga.sh
         opencrypto.library and the Amiga tests (OpenCryptoLibTest,
         OpenCryptoVectors: the same vectors on the 68k; OpenCryptoBench:
-        each call checked and timed), with the os32 GCC 16 stove
+        each call checked and timed), with the os32 GCC 16 stove; 68040
+        code, CPU=060 for the 68060
 
 ## Architecture
 

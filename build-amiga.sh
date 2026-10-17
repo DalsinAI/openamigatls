@@ -2,7 +2,7 @@
 # OpenCrypto for AmigaOS 3.x: opencrypto.library and its Amiga tests, with
 # the os32 GCC 16 stove (bebbo's amiga-gcc, GCC 16, libnix).
 #   STOVE    the stove (default ~/AmigaChrome/stoves/os32-gcc16)
-#   CPU      020 (default: 68020 to 68060, no FPU needed) or 060
+#   CPU      040 (default: the 68040, no FPU needed) or 060
 #   OUT      the output directory (default build-amiga)
 #   FPCR_CHECK  openamigartg's tools/fpcr_check.py, run on the objects when
 #               set (the GCC 16 -m68040 FPCR clash; the build uses no FPU)
@@ -13,14 +13,16 @@
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# soft float: link libnix's libm020, not libm881 (specs/m68k-soft-m68040.specs)
+SPECS="$HERE/specs/m68k-soft-m68040.specs"
 STOVE=${STOVE:-"$HOME/AmigaChrome/stoves/os32-gcc16"}
 P="$STOVE/prefix"
 CC=${CC:-"$P/bin/m68k-amigaos-gcc"}
 OUT=${OUT:-"$HERE/build-amiga"}
-case "${CPU:-020}" in
-    020) CPUFLAGS="-m68020" ;;
+case "${CPU:-040}" in
+    040) CPUFLAGS="-m68040 -specs=$SPECS" ;;
     060) CPUFLAGS="-m68060" ;;
-    *) echo "CPU is 020 or 060"; exit 2 ;;
+    *) echo "CPU is 040 or 060 (builds are 68040 only, with a 68060 variant)"; exit 2 ;;
 esac
 SRC="$HERE/src/opencrypto_sha256.c $HERE/src/opencrypto_sha512.c
      $HERE/src/opencrypto_x25519.c $HERE/src/opencrypto_ed25519.c
