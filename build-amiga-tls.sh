@@ -2,7 +2,7 @@
 # OpenTLS for AmigaOS 3.x: opentls.library and its Amiga test programs.
 #   STOVE    the stove (default ~/AmigaChrome/stoves/os32-gcc16; the GCC 6.5
 #            os32 stove builds it too)
-#   CPU      020 (default: 68020 to 68060) or 060 (no 64-bit multiplies:
+#   CPU      040 (default: the 68040) or 060 (no 64-bit multiplies:
 #            BearSSL's 15-bit maths, as the 68060 traps them). GCC 16 with
 #            -m68060 read the high word of 64-bit values from the wrong stack
 #            slot (found 9 Oct 2026); OpenAmigaGCC's gcc patch 0008 fixes it.
@@ -27,19 +27,19 @@ CC=${CC:-"$P/bin/m68k-amigaos-gcc"}
 AR="$P/bin/m68k-amigaos-ar"
 OUT=${OUT:-"$HERE/build-amiga-tls"}
 BR="$HERE/third_party/bearssl"
-case "${CPU:-020}" in
-    020) CPUFLAGS="-m68020"; MATH="" ;;
+case "${CPU:-040}" in
+    040) CPUFLAGS="-m68040"; MATH="" ;;
     060) CPUFLAGS="-m68060"; MATH="-DOT_LOMUL=1" ;;
-    *) echo "CPU is 020 or 060"; exit 2 ;;
+    *) echo "CPU is 040 or 060 (builds are 68040 only, with a 68060 variant)"; exit 2 ;;
 esac
 
 # The stove records the patches it was built with; the version number is the
 # same with and without the fix.
 gcc16_060_fixed() { ls "$STOVE"/patches/gcc/0008-*shift-by-32* >/dev/null 2>&1; }
-if [ "${CPU:-020}" = 060 ] && "$CC" -dumpversion | grep -q '^16' && ! gcc16_060_fixed && [ "${ALLOW_GCC16_060:-}" != 1 ]; then
+if [ "${CPU:-040}" = 060 ] && "$CC" -dumpversion | grep -q '^16' && ! gcc16_060_fixed && [ "${ALLOW_GCC16_060:-}" != 1 ]; then
     echo "CPU=060 with GCC 16 is refused: this stove's GCC miscompiles 64-bit values at -m68060"
     echo "(no patches/gcc/0008 in $STOVE)."
-    echo "Use a stove with OpenAmigaGCC patch 0008, the os32 stove (GCC 6.5), or CPU=020."
+    echo "Use a stove with OpenAmigaGCC patch 0008, the os32 stove (GCC 6.5), or CPU=040."
     exit 2
 fi
 mkdir -p "$OUT/lib" "$OUT/tests" "$OUT/obj/bearssl" "$OUT/include"
