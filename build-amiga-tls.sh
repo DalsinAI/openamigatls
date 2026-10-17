@@ -21,6 +21,8 @@
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# soft float: link libnix's libm020, not libm881 (specs/m68k-soft-m68040.specs)
+SPECS="$HERE/specs/m68k-soft-m68040.specs"
 STOVE=${STOVE:-"$HOME/AmigaChrome/stoves/os32-gcc16"}
 P="$STOVE/prefix"
 CC=${CC:-"$P/bin/m68k-amigaos-gcc"}
@@ -28,7 +30,7 @@ AR="$P/bin/m68k-amigaos-ar"
 OUT=${OUT:-"$HERE/build-amiga-tls"}
 BR="$HERE/third_party/bearssl"
 case "${CPU:-040}" in
-    040) CPUFLAGS="-m68040"; MATH="" ;;
+    040) CPUFLAGS="-m68040 -specs=$SPECS"; MATH="" ;;
     060) CPUFLAGS="-m68060"; MATH="-DOT_LOMUL=1" ;;
     *) echo "CPU is 040 or 060 (builds are 68040 only, with a 68060 variant)"; exit 2 ;;
 esac
