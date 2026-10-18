@@ -6,7 +6,7 @@ only add (new calls at the end of the table, new constants, new fields at the
 end of `struct OTContextConfig`); nothing below changes meaning.
 
 Headers: `<libraries/opentls.h>` (types, constants, error codes),
-`<proto/opentls.h>` (GCC inline calls, base `OpenTLSBase`),
+`<proto/opentls.h>` (inline calls for GCC and VBCC, base `OpenTLSBase`),
 `<clib/opentls_protos.h>` (prototypes), `fd/opentls_lib.fd`.
 `tools/gen_opentls_headers.py` writes the call headers from one table.
 
