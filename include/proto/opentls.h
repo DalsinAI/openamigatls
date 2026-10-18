@@ -10,7 +10,9 @@
 extern struct Library *OpenTLSBase;
 #endif
 
-#ifdef __GNUC__
+#if defined(__VBCC__)
+#include <inline/opentls_protos.h>
+#elif defined(__GNUC__)
 #include <inline/opentls.h>
 #else
 #include <clib/opentls_protos.h>
