@@ -22,6 +22,7 @@ needs, for OpenPuTTY first:
 | Ed25519 verification | RFC 8032 |
 | ECDSA verification | P-256, P-384, P-521 |
 | RSA public operation | up to 8192 bits, for PKCS #1 signatures |
+| RSASSA-PSS verification | version 2.1 (`OC_RSAPSSVerify`), for TLS 1.3 certificates |
 | AES-128/192/256 | CTR (SSH's SDCTR), CBC, ECB; constant time |
 | ChaCha20, Poly1305 | the 64-bit nonce form SSH's `chacha20-poly1305@openssh.com` uses |
 
@@ -41,6 +42,15 @@ AmigaChrome. Certificate chains against a trust store
 IP addresses, SNI, ALPN, session resumption by session ID (FTPS data
 connections), verify modes and pinned certificates.
 `docs/AutoDocs-OpenTLS.md` is the API; DESIGN.md section 9 the design.
+
+`opentls.library` 1.3 (20 October 2026): TLS 1.3 as well, our own code from
+RFC 8446: one round trip less per connection. One ClientHello offers TLS
+1.3 and 1.2; a TLS 1.2 server is handed to BearSSL on the same connection.
+X25519 (P-256 after a HelloRetryRequest), AES-GCM and ChaCha20-Poly1305,
+ECDSA, RSA-PSS and Ed25519 certificates, resumption with tickets through
+the same `OT_GetSession()`/`OT_SetSession()`, KeyUpdate. No 0-RTT, no
+client certificates. `OT_SetVersion()` sets one connection's range.
+DESIGN.md section 10 has the design.
 
 ## Building and testing
 
