@@ -16,7 +16,8 @@
 #include "bearssl.h"
 
 #define OT_LIB_VERSION   1
-#define OT_LIB_REVISION  2          /* 1.1: OT_GetPeerName; 1.2: S:OpenTLS/ca-bundle.pem, ENVARC:OpenTLS/certs/ */
+#define OT_LIB_REVISION  3          /* 1.1: OT_GetPeerName; 1.2: S:OpenTLS/ca-bundle.pem, ENVARC:OpenTLS/certs/;
+                                       1.3: TLS 1.3, OT_SetVersion */
 
 #define OT_HOST_MAX      255
 #define OT_ALPN_MAX      8          /* protocols offered at once */
@@ -43,6 +44,10 @@ int ot_each_file(const char *dir, const char *suffix,
 /* the time for certificate dates: days since 1 January of year 0, seconds
  * into the day; 0 when the clock is unknown */
 int ot_now(uint32_t *days, uint32_t *seconds);
+/* TLS 1.3: records sent under one key before a KeyUpdate (the tests make
+ * it small) */
+#define OT_KEY_UPDATE_AFTER (1UL << 23)
+uint32_t ot_key_update_after(void);
 LONG ot_sock_read(LONG fd, struct Library *socketbase, void *buf, LONG len);
 LONG ot_sock_write(LONG fd, struct Library *socketbase, const void *buf, LONG len);
 LONG ot_hook_call(struct Hook *hook, void *object, struct OTIOMessage *msg);
@@ -144,10 +149,21 @@ struct OTContext {
     int system_missing;
 };
 
+struct ot13_ticket;
+struct ot13;
+
 struct OTSession {
-    br_ssl_session_parameters params;
+    br_ssl_session_parameters params;        /* TLS 1.2 and older */
     char host[OT_HOST_MAX + 1];
+    struct ot13_ticket *t13;                 /* TLS 1.3: the newest ticket, or NULL */
+    struct OTConnection *source;             /* still waiting for one from it */
+    struct OTSession *next_waiting;
 };
+/* the lock over sessions waiting for a ticket (ot_core.c) */
+int ot_session_init(void);
+void ot_session_cleanup(void);
+void ot_session_lock(void);
+void ot_session_unlock(void);
 
 enum { OTS_NEW, OTS_HANDSHAKE, OTS_OPEN, OTS_CLOSED, OTS_FAILED };
 
@@ -176,6 +192,9 @@ struct OTConnection {
     unsigned char pin[32];
     int offer_session;
     br_ssl_session_parameters offered;
+    struct ot13_ticket *offer13;     /* a TLS 1.3 ticket to offer, or NULL */
+    LONG min_version, max_version;   /* the context's, or OT_SetVersion's */
+    struct ot13 *t13;                /* the TLS 1.3 client (ot_tls13.c), once started */
     int resumed;
     int state;
     int clean_close;                 /* close_notify received */

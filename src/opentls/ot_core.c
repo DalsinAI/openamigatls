@@ -3,6 +3,7 @@
  * from its register entry points; the host tests call them directly.
  * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
 #include "ot_internal.h"
+#include "ot_tls13.h"
 #include "inner.h"      /* BearSSL's br_ssl_engine_fail() */
 #include <clib/opentls_protos.h>
 
@@ -56,8 +57,8 @@ void ot_set_error(struct OTConnection *c, LONG code, LONG detail, const char *a,
     cat(c->text, sizeof c->text, d);
 }
 
-static LONG fail(struct OTConnection *c, LONG code, LONG detail, const char *a,
-                 const char *b, const char *d)
+LONG ot_fail(struct OTConnection *c, LONG code, LONG detail, const char *a,
+             const char *b, const char *d)
 {
     ot_set_error(c, code, detail, a, b, d);
     if (code != OTERR_WOULDBLOCK) c->state = OTS_FAILED;
@@ -235,7 +236,7 @@ static void cert_error(struct OTConnection *c, LONG code, int err)
 }
 
 /* the engine's error code to ours, with its text */
-static LONG engine_error(struct OTConnection *c, int err)
+LONG ot_engine_error(struct OTConnection *c, int err)
 {
     char num[12];
     c->state = OTS_FAILED;
@@ -246,8 +247,9 @@ static LONG engine_error(struct OTConnection *c, int err)
         int alert = err - BR_ERR_RECV_FATAL_ALERT;
         fmt_long(num, alert);
         if (alert == 70) {
-            ot_set_error(c, OTERR_VERSION, alert,
-                "The server refused the protocol version (it may want TLS 1.3 only).", NULL, NULL);
+            ot_set_error(c, OTERR_VERSION, alert, c->max_version < OT_TLS13
+                ? "The server refused the protocol version (it may want TLS 1.3 only)."
+                : "The server refused the protocol version.", NULL, NULL);
         } else {
             ot_set_error(c, OTERR_ALERT, alert, "The server ended the connection: ", alert_name(alert), " (alert ");
             cat(c->text, sizeof c->text, num);
@@ -286,7 +288,7 @@ static LONG engine_error(struct OTConnection *c, int err)
 
 /* ---- I/O and the engine pump ---- */
 
-static LONG io(struct OTConnection *c, int write, unsigned char *buf, size_t len)
+LONG ot_io(struct OTConnection *c, int write, unsigned char *buf, size_t len)
 {
     LONG n;
     if (len > 0x7FFFFFFFUL) len = 0x7FFFFFFFUL;
@@ -312,12 +314,12 @@ static LONG io(struct OTConnection *c, int write, unsigned char *buf, size_t len
 static LONG out_flush(struct OTConnection *c)
 {
     while (c->out_sent < c->out_len) {
-        LONG n = io(c, 1, c->out + c->out_sent, c->out_len - c->out_sent);
+        LONG n = ot_io(c, 1, c->out + c->out_sent, c->out_len - c->out_sent);
         if (n == OTERR_WOULDBLOCK)
-            return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
+            return ot_fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
         if (n <= 0) {
             br_ssl_engine_fail(&c->cc.eng, BR_ERR_IO);
-            return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
+            return ot_fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
         }
         c->out_sent += (size_t)n;
     }
@@ -340,12 +342,12 @@ static LONG out_take(struct OTConnection *c)
     }
     if (c->out_len && (rc = out_flush(c)) != OTERR_OK) return rc;
     if (len <= OT_OUT_MAX) return OTERR_OK;          /* gathered next time round */
-    n = io(c, 1, buf, len);                          /* a big record: as it is */
+    n = ot_io(c, 1, buf, len);                          /* a big record: as it is */
     if (n == OTERR_WOULDBLOCK)
-        return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
+        return ot_fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
     if (n <= 0) {
         br_ssl_engine_fail(e, BR_ERR_IO);
-        return fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
+        return ot_fail(c, OTERR_IO, 0, "Sending to the server failed.", NULL, NULL);
     }
     br_ssl_engine_sendrec_ack(e, (size_t)n);
     return OTERR_OK;
@@ -369,7 +371,7 @@ static LONG pump(struct OTConnection *c, unsigned target)
                 c->state = OTS_CLOSED;
                 return OTERR_CLOSED;     /* the callers turn this into 0 */
             }
-            return engine_error(c, err);
+            return ot_engine_error(c, err);
         }
         if (st & BR_SSL_SENDREC) {
             if ((n = out_take(c)) != OTERR_OK) return n;
@@ -383,18 +385,24 @@ static LONG pump(struct OTConnection *c, unsigned target)
         if (st & BR_SSL_RECVREC) {
             if (c->out_len && (n = out_flush(c)) != OTERR_OK) return n;
             buf = br_ssl_engine_recvrec_buf(e, &len);
-            n = io(c, 0, buf, len);
+            if (ot13_bridge_active(c)) {      /* TLS 1.2 after our ClientHello */
+                n = ot13_bridge_feed(c, buf, len);
+                if (n < 0 && n != OTERR_WOULDBLOCK && c->state == OTS_FAILED) return n;
+                if (n == OTERR_CLOSED) n = 0;
+            } else {
+                n = ot_io(c, 0, buf, len);
+            }
             if (n == OTERR_WOULDBLOCK)
-                return fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
+                return ot_fail(c, OTERR_WOULDBLOCK, 0, "The socket would block.", NULL, NULL);
             if (n == 0) {
                 br_ssl_engine_fail(e, BR_ERR_IO);
-                return fail(c, OTERR_CLOSED, 0, c->state == OTS_HANDSHAKE
+                return ot_fail(c, OTERR_CLOSED, 0, c->state == OTS_HANDSHAKE
                     ? "The server closed the connection during the handshake."
                     : "The server closed the connection without close_notify.", NULL, NULL);
             }
             if (n < 0) {
                 br_ssl_engine_fail(e, BR_ERR_IO);
-                return fail(c, OTERR_IO, 0, "Receiving from the server failed.", NULL, NULL);
+                return ot_fail(c, OTERR_IO, 0, "Receiving from the server failed.", NULL, NULL);
             }
             br_ssl_engine_recvrec_ack(e, (size_t)n);
             continue;
@@ -428,18 +436,15 @@ ULONG OT_Version(VOID)
 struct OTContext *OT_NewContext(CONST struct OTContextConfig *config, LONG *error)
 {
     struct OTContext *x;
-    LONG minv = OT_TLS12, maxv = OT_TLS12, rc;
+    LONG minv = OT_TLS12, maxv = OT_TLS13, rc;
     if (error) *error = OTERR_OK;
     if (config && config->Size < 2 * sizeof(ULONG)) { if (error) *error = OTERR_ARGS; return NULL; }
     if (config && CFG_HAS(config, MinVersion) && config->MinVersion) minv = config->MinVersion;
     if (config && CFG_HAS(config, MaxVersion) && config->MaxVersion) maxv = config->MaxVersion;
-    if (minv > OT_TLS12 && minv <= OT_TLS13) { if (error) *error = OTERR_UNSUPPORTED; return NULL; }
     if (minv < OT_TLS10 || maxv < OT_TLS10 || maxv > OT_TLS13 || minv > OT_TLS13 || maxv < minv) {
         if (error) *error = OTERR_ARGS;
         return NULL;
     }
-    if (minv > OT_TLS12) { if (error) *error = OTERR_UNSUPPORTED; return NULL; }
-    if (maxv > OT_TLS12) maxv = OT_TLS12;       /* TLS 1.3 comes later */
     x = ot_alloc(sizeof *x);
     if (!x || !(x->lock = ot_lock_new())) {
         ot_free(x);
@@ -566,6 +571,8 @@ struct OTConnection *OT_NewConnection(struct OTContext *x, CONST_STRPTR hostname
     if (!c) { if (error) *error = OTERR_NOMEM; return NULL; }
     c->ctx = x;
     c->fd = -1;
+    c->min_version = x->min_version;
+    c->max_version = x->max_version;
     c->iobuf_len = (x->flags & OTCF_SMALL_BUFFERS) ? BR_SSL_BUFSIZE_MONO : BR_SSL_BUFSIZE_BIDI;
     c->iobuf = ot_alloc(c->iobuf_len + OT_OUT_MAX);
     if (!c->iobuf) { ot_free(c); if (error) *error = OTERR_NOMEM; return NULL; }
@@ -587,6 +594,8 @@ struct OTConnection *OT_NewConnection(struct OTContext *x, CONST_STRPTR hostname
 VOID OT_FreeConnection(struct OTConnection *c)
 {
     if (!c) return;
+    ot13_free(c);
+    if (c->offer13) ot_free(c->offer13);
     ot_x509_free(&c->x509);
     if (c->iobuf) {
         memset(c->iobuf, 0, c->iobuf_len + OT_OUT_MAX);
@@ -649,14 +658,29 @@ LONG OT_PinCertificate(struct OTConnection *c, CONST UBYTE *sha256)
 LONG OT_SetSession(struct OTConnection *c, struct OTSession *s)
 {
     BEFORE_HANDSHAKE(c);
+    if (c->offer13) { ot_free(c->offer13); c->offer13 = NULL; }
     if (!s) { c->offer_session = 0; return OTERR_OK; }
     if (!same_host(s->host, c->host)) return OTERR_ARGS;
     c->offered = s->params;
     c->offer_session = 1;
+    ot_session_lock();
+    c->offer13 = ot13_ticket_copy(s->t13);       /* NULL while it waits for one */
+    ot_session_unlock();
     return OTERR_OK;
 }
 
-static const uint16_t ot_suites[] = {
+LONG OT_SetVersion(struct OTConnection *c, LONG minVersion, LONG maxVersion)
+{
+    BEFORE_HANDSHAKE(c);
+    if (!minVersion) minVersion = c->ctx->min_version;
+    if (!maxVersion) maxVersion = c->ctx->max_version;
+    if (minVersion < OT_TLS10 || maxVersion > OT_TLS13 || minVersion > maxVersion) return OTERR_ARGS;
+    c->min_version = minVersion;
+    c->max_version = maxVersion;
+    return OTERR_OK;
+}
+
+const uint16_t ot_suites12[] = {
     BR_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
     BR_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
     BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -678,6 +702,7 @@ static const uint16_t ot_suites[] = {
     BR_TLS_RSA_WITH_AES_128_CBC_SHA,
     BR_TLS_RSA_WITH_AES_256_CBC_SHA,
 };
+const size_t ot_suites12_count = sizeof ot_suites12 / sizeof ot_suites12[0];
 
 static LONG start_handshake(struct OTConnection *c)
 {
@@ -689,17 +714,25 @@ static LONG start_handshake(struct OTConnection *c)
     int need_trust = c->verify == OTV_FULL || c->verify == OTV_NO_HOSTNAME;
 
     if (!c->have_io)
-        return fail(c, OTERR_STATE, 0, "No socket or I/O hook was given.", NULL, NULL);
+        return ot_fail(c, OTERR_STATE, 0, "No socket or I/O hook was given.", NULL, NULL);
     /* With no trust store the handshake still runs as far as the server's
      * certificate, so that the caller can show it and offer to trust it
      * (OT_GetPeerFingerprint, OT_GetPeerName); it then fails with
      * OTERR_TRUSTSTORE unless the certificate is pinned. */
     if (need_trust) merged_anchors(x, &ta, &ta_count);
     ot_glue_select(&c->impls, !(x->flags & OTCF_NO_OFFLOAD));
+    ot_x509_init(&c->x509, c, &c->impls, ta, ta_count);
+    if (c->min_version > OT_TLS12) {             /* TLS 1.3 only: no BearSSL */
+        c->state = OTS_HANDSHAKE;
+        return ot13_start(c);
+    }
 
+    /* BearSSL for TLS 1.2 and older; with TLS 1.3 offered too, it makes
+     * its ClientHello and waits, and ot13_start() sends ours instead */
     br_ssl_client_zero(&c->cc);
-    br_ssl_engine_set_versions(e, (unsigned)x->min_version, (unsigned)x->max_version);
-    br_ssl_engine_set_suites(e, ot_suites, sizeof ot_suites / sizeof ot_suites[0]);
+    br_ssl_engine_set_versions(e, (unsigned)c->min_version,
+                               (unsigned)(c->max_version < OT_TLS12 ? c->max_version : OT_TLS12));
+    br_ssl_engine_set_suites(e, ot_suites12, ot_suites12_count);
     br_ssl_engine_set_hash(e, br_md5_ID, &br_md5_vtable);
     br_ssl_engine_set_hash(e, br_sha1_ID, &br_sha1_vtable);
     br_ssl_engine_set_hash(e, br_sha224_ID, &br_sha224_vtable);
@@ -722,21 +755,21 @@ static LONG start_handshake(struct OTConnection *c)
     br_ssl_engine_set_chacha20(e, c->impls.chacha20);
     br_ssl_engine_set_poly1305(e, c->impls.poly1305);
 
-    ot_x509_init(&c->x509, c, &c->impls, ta, ta_count);
     br_ssl_engine_set_x509(e, &c->x509.vtable);
     br_ssl_engine_set_buffer(e, c->iobuf, c->iobuf_len, !(x->flags & OTCF_SMALL_BUFFERS));
     if (c->alpn_count)
         br_ssl_engine_set_protocol_names(e, c->alpn_names, (size_t)c->alpn_count);
-    if (c->offer_session)
+    if (c->offer_session && c->offered.session_id_len)
         br_ssl_engine_set_session_parameters(e, &c->offered);
     if (ot_random(seed, sizeof seed) != OTERR_OK)
-        return fail(c, OTERR_RANDOM, 0, "No random numbers for the handshake.", NULL, NULL);
+        return ot_fail(c, OTERR_RANDOM, 0, "No random numbers for the handshake.", NULL, NULL);
     br_ssl_engine_inject_entropy(e, seed, sizeof seed);
     memset(seed, 0, sizeof seed);
     c->state = OTS_HANDSHAKE;
-    if (!br_ssl_client_reset(&c->cc, c->ip_len ? NULL : c->host, c->offer_session))
-        return engine_error(c, br_ssl_engine_last_error(e));
-    return OTERR_OK;
+    if (!br_ssl_client_reset(&c->cc, c->ip_len ? NULL : c->host,
+                             c->offer_session && c->offered.session_id_len))
+        return ot_engine_error(c, br_ssl_engine_last_error(e));
+    return c->max_version >= OT_TLS13 ? ot13_start(c) : OTERR_OK;
 }
 
 LONG OT_Handshake(struct OTConnection *c)
@@ -748,10 +781,18 @@ LONG OT_Handshake(struct OTConnection *c)
     if (c->state == OTS_FAILED) return c->error;
     if (c->state == OTS_CLOSED) return OTERR_STATE;
     if (c->state == OTS_NEW && (rc = start_handshake(c)) != OTERR_OK) return rc;
+    if (c->t13 && (rc = ot13_handshake(c)) != OTERR_OK) return rc;
+    if (ot13_active(c)) {
+        c->state = OTS_OPEN;
+        c->error = OTERR_OK;
+        c->text[0] = 0;
+        c->resumed = c->t13->psk_used;
+        return OTERR_OK;
+    }
     rc = pump(c, BR_SSL_SENDAPP | BR_SSL_RECVAPP);
     if (rc == OTERR_CLOSED && c->clean_close) {
         c->state = OTS_FAILED;
-        return fail(c, OTERR_CLOSED, 0, "The server closed the connection during the handshake.", NULL, NULL);
+        return ot_fail(c, OTERR_CLOSED, 0, "The server closed the connection during the handshake.", NULL, NULL);
     }
     if (rc != OTERR_OK) return rc;
     c->state = OTS_OPEN;
@@ -778,6 +819,7 @@ LONG OT_Read(struct OTConnection *c, APTR buffer, LONG length)
     if (c->state == OTS_FAILED) return c->error;
     if (c->state != OTS_OPEN) return OTERR_STATE;
     if (!length) return 0;
+    if (ot13_active(c)) return ot13_read(c, buffer, length);
     rc = pump(c, BR_SSL_RECVAPP);
     if (rc == OTERR_CLOSED && c->clean_close) return 0;
     if (rc != OTERR_OK) return rc;
@@ -795,6 +837,7 @@ LONG OT_Write(struct OTConnection *c, CONST_APTR buffer, LONG length)
     if (!c || length < 0 || (!buffer && length)) return OTERR_ARGS;
     if (c->state == OTS_FAILED) return c->error;
     if (c->state != OTS_OPEN) return OTERR_STATE;
+    if (ot13_active(c)) return ot13_write(c, p, length);
     while (total < length) {
         size_t room, n;
         unsigned char *buf;
@@ -802,7 +845,7 @@ LONG OT_Write(struct OTConnection *c, CONST_APTR buffer, LONG length)
         if (rc == OTERR_WOULDBLOCK) return total ? total : rc;
         if (rc == OTERR_CLOSED && c->clean_close) {
             c->state = OTS_FAILED;
-            return fail(c, OTERR_CLOSED, 0, "The server closed the connection.", NULL, NULL);
+            return ot_fail(c, OTERR_CLOSED, 0, "The server closed the connection.", NULL, NULL);
         }
         if (rc != OTERR_OK) return rc;
         buf = br_ssl_engine_sendapp_buf(&c->cc.eng, &room);
@@ -821,6 +864,7 @@ LONG OT_Pending(struct OTConnection *c)
 {
     size_t avail = 0;
     if (!c || c->state != OTS_OPEN) return 0;
+    if (ot13_active(c)) return ot13_pending(c);
     if (br_ssl_engine_current_state(&c->cc.eng) & BR_SSL_RECVAPP)
         br_ssl_engine_recvapp_buf(&c->cc.eng, &avail);
     return (LONG)avail;
@@ -832,8 +876,12 @@ LONG OT_Close(struct OTConnection *c)
     if (!c) return OTERR_ARGS;
     if (c->state == OTS_CLOSED) return OTERR_OK;
     if (c->state != OTS_OPEN) return OTERR_STATE;
-    br_ssl_engine_close(&c->cc.eng);
-    rc = flush_out(c);
+    if (ot13_active(c)) {
+        rc = ot13_close(c);
+    } else {
+        br_ssl_engine_close(&c->cc.eng);
+        rc = flush_out(c);
+    }
     if (rc == OTERR_WOULDBLOCK) { c->state = OTS_OPEN; return rc; }
     if (rc != OTERR_OK) return rc;
     c->state = OTS_CLOSED;
@@ -843,12 +891,53 @@ LONG OT_Close(struct OTConnection *c)
 
 /* ---- sessions ---- */
 
+/* A TLS 1.3 session may wait for its ticket (OT_GetSession) while the
+ * connection that will bring it, and the session, are used and freed by
+ * different tasks: one lock covers the waiting lists and tickets. */
+static void *session_lock;
+
+int ot_session_init(void)
+{
+    if (!session_lock) session_lock = ot_lock_new();
+    return session_lock != NULL;
+}
+
+void ot_session_cleanup(void)
+{
+    ot_lock_free(session_lock);
+    session_lock = NULL;
+}
+
+void ot_session_lock(void)
+{
+    if (!session_lock) ot_session_init();     /* the host tests; the library makes it at init */
+    if (session_lock) ot_lock(session_lock);
+}
+
+void ot_session_unlock(void)
+{
+    if (session_lock) ot_unlock(session_lock);
+}
+
 struct OTSession *OT_GetSession(struct OTConnection *c)
 {
     struct OTSession *s;
     if (!c || (c->state != OTS_OPEN && c->state != OTS_CLOSED)) return NULL;
     s = ot_alloc(sizeof *s);
     if (!s) return NULL;
+    if (ot13_active(c)) {
+        /* TLS 1.3: the newest ticket; until the first comes (OT_Read reads
+         * it, after the handshake), a session that waits for it */
+        ot_strlcpy(s->host, c->host, sizeof s->host);
+        ot_session_lock();
+        s->t13 = ot13_ticket_copy(c->t13->ticket);
+        ot_session_unlock();
+        if (!s->t13) {
+            if (c->state != OTS_OPEN) { ot_free(s); return NULL; }
+            ot13_session_wait(c, s);
+        }
+        return s;
+    }
     br_ssl_engine_get_session_parameters(&c->cc.eng, &s->params);
     if (!s->params.session_id_len) { ot_free(s); return NULL; }
     ot_strlcpy(s->host, c->host, sizeof s->host);
@@ -858,6 +947,8 @@ struct OTSession *OT_GetSession(struct OTConnection *c)
 VOID OT_FreeSession(struct OTSession *s)
 {
     if (!s) return;
+    if (s->source) ot13_session_unwait(s);
+    if (s->t13) ot_free(s->t13);
     memset(s, 0, sizeof *s);       /* the master secret */
     ot_free(s);
 }
@@ -912,6 +1003,7 @@ CONST_STRPTR OT_ErrorString(LONG error)
 LONG OT_GetProtocol(struct OTConnection *c)
 {
     if (!c || (c->state != OTS_OPEN && c->state != OTS_CLOSED)) return 0;
+    if (ot13_active(c)) return OT_TLS13;
     return (LONG)br_ssl_engine_get_version(&c->cc.eng);
 }
 
@@ -920,6 +1012,7 @@ CONST_STRPTR OT_GetCipher(struct OTConnection *c)
     br_ssl_session_parameters p;
     size_t i;
     if (!c || (c->state != OTS_OPEN && c->state != OTS_CLOSED)) return (CONST_STRPTR)"";
+    if (ot13_active(c)) return (CONST_STRPTR)c->t13->suite->name;
     br_ssl_engine_get_session_parameters(&c->cc.eng, &p);
     for (i = 0; i < SUITE_COUNT; ++i)
         if (suite_names[i].id == p.cipher_suite) return (CONST_STRPTR)suite_names[i].name;

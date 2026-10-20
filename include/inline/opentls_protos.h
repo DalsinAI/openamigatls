@@ -112,4 +112,7 @@ LONG __OT_GetErrorDetail(__reg("a6") struct Library *, __reg("a0") struct OTConn
 CONST_STRPTR __OT_GetPeerName(__reg("a6") struct Library *, __reg("a0") struct OTConnection *connection) = "\tjsr\t-222(a6)";
 #define OT_GetPeerName(connection) __OT_GetPeerName(OPENTLS_BASE_NAME, (connection))
 
+LONG __OT_SetVersion(__reg("a6") struct Library *, __reg("a0") struct OTConnection *connection, __reg("d0") LONG minVersion, __reg("d1") LONG maxVersion) = "\tjsr\t-228(a6)";
+#define OT_SetVersion(connection, minVersion, maxVersion) __OT_SetVersion(OPENTLS_BASE_NAME, (connection), (minVersion), (maxVersion))
+
 #endif

@@ -35,4 +35,5 @@ OT_Random(buffer,length)(a0/d0)
 OT_Accelerated()()
 OT_GetErrorDetail(connection)(a0)
 OT_GetPeerName(connection)(a0)
+OT_SetVersion(connection,minVersion,maxVersion)(a0/d0/d1)
 ##end

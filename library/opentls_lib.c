@@ -1,4 +1,4 @@
-/* opentls.library 1.2: a TLS client for AmigaOS 3.x, on BearSSL
+/* opentls.library 1.3: a TLS client for AmigaOS 3.x, on BearSSL
  * (third_party/bearssl, MIT) with OpenCrypto doing the maths that the x86
  * or ARM64 cores can do on AmigaChrome (src/opentls/ot_glue.c).
  * docs/AutoDocs-OpenTLS.md is the contract.
@@ -29,7 +29,7 @@ int start(void) { return -1; }
 
 static const char lib_name[] = OPENTLSLIB_NAME;
 static const char lib_id[] =
-    "opentls.library 1.2 (9.10.2026) OpenTLS on BearSSL, AmigaChrome Team\r\n";
+    "opentls.library 1.3 (20.10.2026) OpenTLS on BearSSL, AmigaChrome Team\r\n";
 
 static struct Library *lib_init(REG(d0, struct OpenTLSLibBase *base),
                                 REG(a0, BPTR seglist),
@@ -70,7 +70,7 @@ static struct Library *lib_init(REG(d0, struct OpenTLSLibBase *base),
     base->seglist = seglist;
     base->lib.lib_Revision = OT_LIB_REVISION;
     DOSBase = (struct DosLibrary *)OpenLibrary((CONST_STRPTR)"dos.library", 37);
-    if (!DOSBase || !ot_random_init() || !ot_trust_init()) {
+    if (!DOSBase || !ot_random_init() || !ot_trust_init() || !ot_session_init()) {
         if (DOSBase) CloseLibrary((struct Library *)DOSBase);
         FreeMem((UBYTE *)base - base->lib.lib_NegSize,
                 base->lib.lib_NegSize + base->lib.lib_PosSize);
@@ -105,6 +105,7 @@ static BPTR lib_expunge(REG(a6, struct OpenTLSLibBase *base))
     Remove(&base->lib.lib_Node);
     ot_glue_cleanup();
     ot_system_anchors_free();
+    ot_session_cleanup();
     ot_random_cleanup();
     CloseLibrary((struct Library *)DOSBase);
     FreeMem((UBYTE *)base - base->lib.lib_NegSize,

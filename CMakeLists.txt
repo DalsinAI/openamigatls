@@ -44,7 +44,8 @@ target_include_directories(bearssl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_part
 
 add_library(opentls STATIC
     src/opentls/ot_core.c src/opentls/ot_glue.c src/opentls/ot_platform.c
-    src/opentls/ot_random.c src/opentls/ot_trust.c src/opentls/ot_x509.c)
+    src/opentls/ot_random.c src/opentls/ot_trust.c src/opentls/ot_x509.c
+    src/opentls/ot_tls13.c src/opentls/ot_tls13_keys.c src/opentls/ot_tls13_bridge.c)
 target_include_directories(opentls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/host/include
                                           ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)

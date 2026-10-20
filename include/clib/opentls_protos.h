@@ -39,5 +39,6 @@ LONG OT_Random(APTR buffer, LONG length);
 ULONG OT_Accelerated(VOID);
 LONG OT_GetErrorDetail(struct OTConnection *connection);
 CONST_STRPTR OT_GetPeerName(struct OTConnection *connection);
+LONG OT_SetVersion(struct OTConnection *connection, LONG minVersion, LONG maxVersion);
 
 #endif
