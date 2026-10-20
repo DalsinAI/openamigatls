@@ -189,6 +189,28 @@ int oc_rsa_public(uint8_t *out, const uint8_t *sig, const uint8_t *n, size_t n_l
     return 0;
 }
 
+/* ---- RSASSA-PSS (the encoding check is opencrypto_pss.c) ---- */
+
+static void pss_sha256(const void *d, size_t l, uint8_t *o) { oc_sha256(d, l, o); }
+static void pss_sha384(const void *d, size_t l, uint8_t *o) { oc_sha384(d, l, o); }
+static void pss_sha512(const void *d, size_t l, uint8_t *o) { oc_sha512(d, l, o); }
+
+int oc_rsa_pss_verify(const uint8_t *sig, const uint8_t *n, size_t n_length,
+                      const uint8_t *e, size_t e_length,
+                      const uint8_t *mhash, size_t hash_length, long salt_length)
+{
+    uint8_t em[OC_RSA_MAX_BYTES];
+    oc_hash_fn h = hash_length == 32 ? pss_sha256 : hash_length == 48 ? pss_sha384
+                 : hash_length == 64 ? pss_sha512 : NULL;
+    size_t bits;
+    if (!h || !sig || !n || !e || !mhash) return 0;
+    while (n_length && !n[0]) { ++n; ++sig; --n_length; }
+    if (!n_length || n_length > sizeof em) return 0;
+    if (oc_rsa_public(em, sig, n, n_length, e, e_length) != 0) return 0;
+    for (bits = 8 * n_length; !(n[0] & (0x80 >> (8 * n_length - bits))); --bits) {}
+    return oc_emsa_pss_verify(em, n_length, bits, mhash, hash_length, salt_length, h);
+}
+
 /* ---- ECDSA ---- */
 
 typedef struct {

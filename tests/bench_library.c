@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "vectors.h"
+
 struct Library *OpenCryptoBase;
 struct Device *TimerBase;
 static struct timerequest treq;
@@ -147,6 +149,23 @@ int main(int argc, char **argv)
         OC_ChaCha20(&c);
         ok = buf[1000] == (UBYTE)1000 && buf[16383] == (UBYTE)16383;
         report("ChaCha20, 16 KB", ok, t, 1);
+    }
+    if (OpenCryptoBase->lib_Revision >= 1) {   /* RSASSA-PSS, revision 1 */
+        static UBYTE pn[256], psig[256], ph[32];
+        static const UBYTE pe[3] = { 1, 0, 1 };
+        struct OCRSAPSSRequest r;
+        int ok = 1;
+        unhex(pn, OC_TEST_PSS2048_N);
+        unhex(psig, OC_TEST_PSS2048_SIG);
+        unhex(ph, OC_TEST_PSS2048_HASH);
+        r.sig = psig; r.n = pn; r.n_length = 256; r.e = pe; r.e_length = 3;
+        r.hash = ph; r.hash_length = 32; r.salt_length = 32;
+        t = now();
+        for (i = 0; i < n; ++i) ok &= OC_RSAPSSVerify(&r) == 1;
+        t = now() - t;
+        ph[0] ^= 1;
+        ok &= OC_RSAPSSVerify(&r) == 0;
+        report("RSASSA-PSS 2048 verify (SHA-256)", ok, t, n);
     }
     printf("OpenCryptoBench: %s\n", fails ? "FAILED" : "all checks passed");
     CloseLibrary(OpenCryptoBase);

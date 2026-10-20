@@ -8,7 +8,7 @@ add_library(opencrypto STATIC
     src/opencrypto_sha256.c src/opencrypto_sha512.c
     src/opencrypto_x25519.c src/opencrypto_ed25519.c
     src/opencrypto_sntrup761.c src/opencrypto_chacha20.c
-    src/opencrypto_aes.c src/opencrypto_pubkey.c)
+    src/opencrypto_aes.c src/opencrypto_pubkey.c src/opencrypto_pss.c)
 target_include_directories(opencrypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(test_opencrypto tests/test_opencrypto.c)

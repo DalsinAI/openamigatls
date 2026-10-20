@@ -6,7 +6,7 @@
 
 #define OPENCRYPTOLIB_NAME "opencrypto.library"
 #define OPENCRYPTOLIB_VERSION 2
-#define OPENCRYPTOLIB_REVISION 0
+#define OPENCRYPTOLIB_REVISION 1
 
 struct OCBufferHash {
     const void *data;
@@ -123,6 +123,19 @@ struct OCECDSARequest {
     const UBYTE *qx, *qy, *r, *s; /* (curve + 7) / 8 bytes each, big-endian */
     const UBYTE *hash;
     ULONG hash_length;
+};                                /* 1 valid, 0 not */
+
+/* ---- version 2, revision 1 (20 October 2026): for TLS 1.3 ---- */
+
+struct OCRSAPSSRequest {          /* RSASSA-PSS, MGF1 with the same hash */
+    const UBYTE *sig;             /* n_length bytes */
+    const UBYTE *n;
+    ULONG n_length;               /* up to OC_RSA_MAX_BYTES */
+    const UBYTE *e;
+    ULONG e_length;
+    const UBYTE *hash;            /* the message's hash */
+    ULONG hash_length;            /* 32 SHA-256, 48 SHA-384, 64 SHA-512 */
+    LONG salt_length;             /* -1: any */
 };                                /* 1 valid, 0 not */
 
 #endif
