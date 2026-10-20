@@ -80,6 +80,9 @@ struct ot_impls {
 /* the implementations a connection uses: OpenCrypto's where it is
  * accelerated (or everywhere, in the host tests), BearSSL's otherwise */
 void ot_glue_select(struct ot_impls *impls, int offload);
+/* Ed25519 (TLS 1.3 certificates): whether there is one, and the check (1 valid) */
+int ot_glue_has_ed25519(void);
+int ot_glue_ed25519(const unsigned char *sig, const unsigned char *pk, const void *msg, size_t len);
 
 /* ---- trust (ot_trust.c) ---- */
 struct ot_anchors {
@@ -101,6 +104,17 @@ struct ot_x509 {
     br_x509_decoder_context leaf_decoder;
     br_sha256_context leaf_hash;
     struct OTConnection *conn;
+    const struct ot_impls *impls;
+    const br_x509_trust_anchor *ta;
+    size_t ta_count;
+    int tls13;                       /* the TLS 1.3 client feeds it: Ed25519 leaves too */
+    int deferred;                    /* the leaf held back until its key type is known */
+    int inner_started;
+    int leaf_ed25519;                /* the leaf's key is Ed25519, in ed25519 */
+    unsigned char ed25519[32];
+    unsigned char *issuer;           /* the next certificate, kept for an Ed25519 leaf */
+    size_t issuer_len, issuer_cap;
+    int issuer_ok;
     int cert_index;
     int accepted;                    /* by pin or OTV_NONE: leaf_decoder's key */
     int leaf_ok;
