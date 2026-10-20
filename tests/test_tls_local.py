@@ -214,7 +214,8 @@ def main():
              {"result": "ok", "conn0.protocol": "0303"})
     case("TLS 1.2: I/O in 7-byte pieces, every other call refused", Server("ecleaf", NO13),
          CA + get + ["--hook", "--chunk", "7", "--connections", "2"],
-         {"result": "ok", "conn0.protocol": "0303", "conn1.resumed": "1"})
+         {"result": "ok", "conn0.protocol": "0303", "conn1.resumed": "1",
+          "conn0.ticket_at_handshake": "1", "conn0.ticket": "1"})
     case("TLS 1.2: 1 MB download", Server("ecleaf", NO13, www="-WWW"),
          CA + ["--send", "GET /big.bin HTTP/1.0\\r\\n\\r\\n"],
          {"result": "ok", "conn0.protocol": "0303", "conn0.received": str((1 << 20) + len(WWW_HEADER))})
@@ -251,9 +252,9 @@ def main():
          host="127.0.0.1")
     case("TLS 1.3 ticket resumption (3 connections)", Server("ecleaf"), CA + get + ["--connections", "3"],
          {"result": "ok", "conn0.resumed": "0", "conn1.resumed": "1", "conn2.resumed": "1",
-          "conn1.protocol": "0304"})
+          "conn1.protocol": "0304", "conn0.ticket_at_handshake": "0", "conn0.ticket": "1"})
     case("TLS 1.3 no tickets from the server: full handshakes", Server("ecleaf", ["-num_tickets", "0"]),
-         CA + get + ["--connections", "2"], {"result": "ok", "conn1.resumed": "0"})
+         CA + get + ["--connections", "2"], {"result": "ok", "conn1.resumed": "0", "conn0.ticket": "0"})
     case("TLS 1.3 ALPN", Server("ecleaf", ["-alpn", "h2,http/1.1"]), CA + ["--alpn", "ftp,http/1.1"],
          {"result": "ok", "conn0.protocol": "0304", "conn0.alpn": "http/1.1"})
     case("TLS 1.3 I/O in 7-byte pieces, every other call refused", Server("ecleaf"),

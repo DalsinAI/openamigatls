@@ -331,7 +331,7 @@ usual pattern, a session taken once right after the handshake and kept in
 a cache, resumes TLS 1.3 as soon as the connection has read its first
 data (HTTP's answer, an FTP reply). On a TLS 1.3 connection that is closed
 (`OT_Close()`, or the server's close_notify) and has no ticket, it answers
-NULL.
+NULL. `OT_SessionHasTicket()` says whether a session can resume yet.
 
 The FTPS pattern: the control connection's session, resumed on each data
 connection, which servers such as vsftpd (`require_ssl_reuse`) demand:
@@ -454,3 +454,19 @@ TLS_AES_256_GCM_SHA384; X25519 (P-256 when the server asks for it);
 certificates with ECDSA, RSA (RSA-PSS signatures) and Ed25519 keys;
 resumption with tickets. Not supported: 0-RTT data and client
 certificates (a server that asks for one gets none).
+
+## OT_SessionHasTicket (version 1, revision 3)
+
+    has = OT_SessionHasTicket(session)
+    D0                        A0
+
+    LONG OT_SessionHasTicket(struct OTSession *session);
+
+1 when `session` (from `OT_GetSession()`) has something to resume with: a
+TLS 1.2 (or older) session ID, or a TLS 1.3 ticket. 0 for a TLS 1.3
+session still waiting for its first ticket (it may get one in a later
+`OT_Read()` on its connection), for one that never will (its connection
+was freed first), and for NULL. A cache can use it to keep only sessions
+that resume, or to take a session again later. Safe from any task while
+the connection is in use. Check the revision (`OT_Version() & 0xFFFF` at
+least 3) before calling it.

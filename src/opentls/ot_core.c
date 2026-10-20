@@ -953,6 +953,19 @@ VOID OT_FreeSession(struct OTSession *s)
     ot_free(s);
 }
 
+/* 1 when the session can resume something: a TLS 1.2 session ID, or a
+ * TLS 1.3 ticket (which a waiting session gets in OT_Read) */
+LONG OT_SessionHasTicket(struct OTSession *s)
+{
+    LONG has;
+    if (!s) return 0;
+    if (s->params.session_id_len) return 1;
+    ot_session_lock();
+    has = s->t13 != NULL;
+    ot_session_unlock();
+    return has;
+}
+
 LONG OT_SessionResumed(struct OTConnection *c)
 {
     return c && c->state != OTS_NEW && c->resumed ? 1 : 0;

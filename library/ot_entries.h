@@ -69,3 +69,5 @@ static CONST_STRPTR LIB_OT_GetPeerName(REG(a0, struct OTConnection *connection),
 { (void)base; return OT_GetPeerName(connection); }
 static LONG LIB_OT_SetVersion(REG(a0, struct OTConnection *connection), REG(d0, LONG minVersion), REG(d1, LONG maxVersion), REG(a6, struct Library *base))
 { (void)base; return OT_SetVersion(connection, minVersion, maxVersion); }
+static LONG LIB_OT_SessionHasTicket(REG(a0, struct OTSession *session), REG(a6, struct Library *base))
+{ (void)base; return OT_SessionHasTicket(session); }

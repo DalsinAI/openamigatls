@@ -40,5 +40,6 @@ ULONG OT_Accelerated(VOID);
 LONG OT_GetErrorDetail(struct OTConnection *connection);
 CONST_STRPTR OT_GetPeerName(struct OTConnection *connection);
 LONG OT_SetVersion(struct OTConnection *connection, LONG minVersion, LONG maxVersion);
+LONG OT_SessionHasTicket(struct OTSession *session);
 
 #endif

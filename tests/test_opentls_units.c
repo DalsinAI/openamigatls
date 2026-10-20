@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ot_internal.h"
+#include "ot_tls13.h"
 #include <clib/opentls_protos.h>
 
 static int failures;
@@ -250,6 +251,22 @@ static void test_api(void)
         CHECK(OT_SetSession(c, &s) == OTERR_ARGS, "session for another host refused");
         strcpy(s.host, "FTP.example.org");
         CHECK(OT_SetSession(c, &s) == OTERR_OK, "session for the same host");
+        /* OT_SessionHasTicket: a TLS 1.2 session ID, or a TLS 1.3 ticket */
+        CHECK(OT_SessionHasTicket(NULL) == 0, "no session: no ticket");
+        CHECK(OT_SessionHasTicket(&s) == 0, "a TLS 1.3 session still waiting: no ticket");
+        CHECK(c->offer13 == NULL, "a waiting session offers no ticket");
+        s.params.session_id_len = 32;
+        CHECK(OT_SessionHasTicket(&s) == 1, "a TLS 1.2 session ID");
+        s.params.session_id_len = 0;
+        s.t13 = ot_alloc(sizeof *s.t13 + 16);
+        if (s.t13) {
+            s.t13->suite = OT13_AES_128_GCM_SHA256;
+            s.t13->len = 16;
+            CHECK(OT_SessionHasTicket(&s) == 1, "a TLS 1.3 ticket");
+            CHECK(OT_SetSession(c, &s) == OTERR_OK && c->offer13 && c->offer13 != s.t13
+                  && c->offer13->len == 16, "the ticket copied for offering");
+            ot_free(s.t13);
+        }
     }
     OT_FreeConnection(c);
     CHECK(OT_NewConnection(x, (CONST_STRPTR)"fe80::zz", &err) == NULL && err == OTERR_ARGS, "bad address");

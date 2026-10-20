@@ -191,6 +191,12 @@ static int has_ping(const char *p, long n)
     return 0;
 }
 
+/* OT_SessionHasTicket(), from revision 3; -1 when the library is older */
+static long has_ticket(struct OTSession *s)
+{
+    return (OT_Version() & 0xFFFF) >= 3 ? (long)OT_SessionHasTicket(s) : -1;
+}
+
 static int hexpin(const char *s, UBYTE *out)
 {
     int i;
@@ -266,7 +272,10 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
            "conn%d.resumed=%ld\nconn%d.ms=%.1f\n",
            index, index, (unsigned long)OT_GetProtocol(c), index, (const char *)OT_GetCipher(c),
            index, (const char *)OT_GetALPN(c), index, (long)OT_SessionResumed(c), index, t1 - t0);
-    if (!*session) *session = OT_GetSession(c);
+    if (!*session) {
+        *session = OT_GetSession(c);
+        if (*session) printf("conn%d.ticket_at_handshake=%ld\n", index, has_ticket(*session));
+    }
     if (opt_upload > 0) {
         static char block[20000];
         long sent = 0, n;
@@ -313,6 +322,7 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
         }
         in[got < (long)sizeof in - 1 ? got : (long)sizeof in - 1] = 0;
         printf("conn%d.received=%ld\n", index, got);
+        if (*session) printf("conn%d.ticket=%ld\n", index, has_ticket(*session));
         if (opt_print) printf("%s\n", in);
         if (opt_expect && !strstr(in, opt_expect)) { printf("conn%d.expect=missing\n", index); ok = 0; }
     }

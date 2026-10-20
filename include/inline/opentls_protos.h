@@ -115,4 +115,7 @@ CONST_STRPTR __OT_GetPeerName(__reg("a6") struct Library *, __reg("a0") struct O
 LONG __OT_SetVersion(__reg("a6") struct Library *, __reg("a0") struct OTConnection *connection, __reg("d0") LONG minVersion, __reg("d1") LONG maxVersion) = "\tjsr\t-228(a6)";
 #define OT_SetVersion(connection, minVersion, maxVersion) __OT_SetVersion(OPENTLS_BASE_NAME, (connection), (minVersion), (maxVersion))
 
+LONG __OT_SessionHasTicket(__reg("a6") struct Library *, __reg("a0") struct OTSession *session) = "\tjsr\t-234(a6)";
+#define OT_SessionHasTicket(session) __OT_SessionHasTicket(OPENTLS_BASE_NAME, (session))
+
 #endif

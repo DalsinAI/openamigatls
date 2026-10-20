@@ -112,4 +112,7 @@
 #define OT_SetVersion(connection, minVersion, maxVersion) \
 	LP3(0xe4, LONG, OT_SetVersion, struct OTConnection *, connection, a0, LONG, minVersion, d0, LONG, maxVersion, d1, , OPENTLS_BASE_NAME)
 
+#define OT_SessionHasTicket(session) \
+	LP1(0xea, LONG, OT_SessionHasTicket, struct OTSession *, session, a0, , OPENTLS_BASE_NAME)
+
 #endif

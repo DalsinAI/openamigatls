@@ -44,6 +44,7 @@ CALLS = [
     ("OT_GetPeerName", "CONST_STRPTR", [(X, "connection", "a0")]),
     # version 1, revision 3 (additive)
     ("OT_SetVersion", "LONG", [(X, "connection", "a0"), ("LONG", "minVersion", "d0"), ("LONG", "maxVersion", "d1")]),
+    ("OT_SessionHasTicket", "LONG", [(S, "session", "a0")]),
 ]
 BIAS = 30
 

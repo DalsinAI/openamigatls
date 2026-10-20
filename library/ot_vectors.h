@@ -34,3 +34,4 @@
     (APTR)LIB_OT_GetErrorDetail,
     (APTR)LIB_OT_GetPeerName,
     (APTR)LIB_OT_SetVersion,
+    (APTR)LIB_OT_SessionHasTicket,

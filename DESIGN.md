@@ -262,13 +262,17 @@ over the primitives the TLS 1.2 path already uses.
   lists, since sessions are handed between tasks). `OT_SetSession()` then
   offers the ticket, with the binder over the ClientHello; after a
   HelloRetryRequest it is offered again only if its hash suits the suite
-  chosen.
+  chosen. `OT_SessionHasTicket()` (revision 3) tells a cache whether a
+  session can resume yet: 1 for a TLS 1.2 session ID or a TLS 1.3 ticket,
+  0 for a session still waiting (curl's backend uses it to decide when a
+  session is worth keeping).
 - **API.** Compatible: `MaxVersion` 0 now means TLS 1.3, `MinVersion`
   `OT_TLS13` is accepted, `OT_GetProtocol()` answers `OT_TLS13`, and the
-  new `OT_SetVersion()` (revision 3, at the end of the table) sets one
-  connection's range.
-- **Size.** opentls.library (GCC 16, 68040) grows from 150540 to 189484
-  bytes (+38944): the TLS 1.3 client about 22 KB, the key schedule and
+  new `OT_SetVersion()` and `OT_SessionHasTicket()` (revision 3, at the
+  end of the table) set one connection's range and say whether a session
+  can resume.
+- **Size.** opentls.library (GCC 16, 68040) grows from 150540 to 189624
+  bytes (+39084): the TLS 1.3 client about 22 KB, the key schedule and
   records 3 KB, the bridge 2 KB, the Ed25519 leaf checks 4 KB, RSA-PSS
   1 KB. No more of BearSSL is linked than before.
 - **Tests.** `tests/test_tls13_vectors.c` checks the key schedule, the

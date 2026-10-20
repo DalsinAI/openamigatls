@@ -17,7 +17,7 @@
 
 #define OT_LIB_VERSION   1
 #define OT_LIB_REVISION  3          /* 1.1: OT_GetPeerName; 1.2: S:OpenTLS/ca-bundle.pem, ENVARC:OpenTLS/certs/;
-                                       1.3: TLS 1.3, OT_SetVersion */
+                                       1.3: TLS 1.3, OT_SetVersion, OT_SessionHasTicket */
 
 #define OT_HOST_MAX      255
 #define OT_ALPN_MAX      8          /* protocols offered at once */
