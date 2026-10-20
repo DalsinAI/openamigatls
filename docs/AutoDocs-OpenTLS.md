@@ -10,9 +10,11 @@ Headers: `<libraries/opentls.h>` (types, constants, error codes),
 `<clib/opentls_protos.h>` (prototypes), `fd/opentls_lib.fd`.
 `tools/gen_opentls_headers.py` writes the call headers from one table.
 
-Version 1 of the library speaks TLS 1.2 (and 1.0/1.1 when a caller asks for
-them). TLS 1.3 comes later on OpenCrypto's primitives, through the same
-calls: a program that leaves `MaxVersion` at 0 gets it without changes.
+Since revision 3 (opentls.library 1.3) the library speaks TLS 1.3 and TLS
+1.2 (and 1.0/1.1 when a caller asks for them). A program that leaves
+`MaxVersion` at 0 gets TLS 1.3 without changes: one ClientHello offers both,
+and a server that answers with TLS 1.2 goes on over the same connection.
+`OT_SetVersion()` sets the range of one connection.
 
 ## Conventions
 
@@ -27,7 +29,13 @@ calls: a program that leaves `MaxVersion` at 0 gets it without changes.
   `OT_Handshake()`, `OT_Read()`, `OT_Write()` and `OT_Close()` may answer
   `OTERR_WOULDBLOCK`; call the same function again when the socket is ready.
 - Memory: about 33 KB per connection (17 KB with `OTCF_SMALL_BUFFERS`, at
-  some cost in speed), plus the trust store once per context.
+  some cost in speed), plus the trust store once per context. TLS 1.3 uses
+  the same buffers, and about 1 KB of its own state. For the length of a
+  handshake that falls back to TLS 1.2, 17 KB more; a handshake message
+  longer than a record (a long certificate chain) is put together in a
+  buffer of its length, up to 64 KB, freed with the connection. A TLS 1.3
+  session holds the server's ticket (2 KB at most; longer ones are not
+  kept).
 - Stack: a handshake needs at least 16 KB of the calling task's stack free.
 
 ## Error codes
@@ -51,7 +59,7 @@ calls: a program that leaves `MaxVersion` at 0 gets it without changes.
 | `OTERR_TRUSTSTORE` | -14 | verification was needed and no trust store could be read |
 | `OTERR_STATE` | -15 | a call out of order (e.g. `OT_Read()` before the handshake) |
 | `OTERR_RANDOM` | -16 | no entropy |
-| `OTERR_UNSUPPORTED` | -17 | something this version lacks (e.g. `MinVersion` `OT_TLS13`) |
+| `OTERR_UNSUPPORTED` | -17 | something this version lacks (`MinVersion` `OT_TLS13` before revision 3) |
 | `OTERR_INTERNAL` | -18 | a bug in OpenTLS |
 | `OTERR_PINNED` | -19 | `OTV_PINNED_ONLY` and the certificate is not the pinned one |
 
@@ -108,8 +116,9 @@ may be NULL for the defaults; otherwise set `config->Size` to
   `OTCF_NO_OFFLOAD` (do every operation as 68k code, for measuring),
   `OTCF_SMALL_BUFFERS`.
 - `MinVersion`, `MaxVersion`: `OT_TLS10` to `OT_TLS13`; 0 means TLS 1.2 and
-  the highest the library has. A range the library cannot meet fails with
-  `OTERR_UNSUPPORTED`.
+  the highest the library has (TLS 1.3 since revision 3). A range the
+  library cannot meet fails with `OTERR_UNSUPPORTED` (before revision 3,
+  any `MinVersion` of `OT_TLS13`).
 - `CAFile`: a PEM bundle trusted as well.
 - `ALPN`: the default ALPN list for connections, e.g. `"h2,http/1.1"`.
 
@@ -246,6 +255,12 @@ different host name is refused with `OTERR_ARGS`. If the server will not
 resume, the handshake is a full one and still works; `OT_SessionResumed()`
 says which happened. Before the handshake only.
 
+A session from a TLS 1.3 connection is resumed with the server's ticket
+(PSK with a fresh ECDHE key exchange; no 0-RTT data). One still waiting for
+its ticket (see `OT_GetSession()`) offers nothing, and the handshake is a
+full one. A ticket is offered for as long as the server said it lasts, and
+7 days at most.
+
 ## OT_Handshake
 
     result = OT_Handshake(connection)
@@ -306,6 +321,18 @@ After a successful handshake: a copy of the connection's session, to resume
 on another connection to the same host (`OT_SetSession()`), even after this
 connection is freed. Free it with `OT_FreeSession()`. NULL if there is none.
 
+TLS 1.3 servers send their tickets after the handshake, and OpenTLS reads
+them in `OT_Read()`. Called before one has come, `OT_GetSession()` answers a
+session that waits for it: it is filled, in place, by the `OT_Read()` that
+reads the first ticket (and a later one replaces it), while both the
+session and the connection exist. Kept after the connection is freed, a
+session that never got a ticket stays empty and resumes nothing. So the
+usual pattern, a session taken once right after the handshake and kept in
+a cache, resumes TLS 1.3 as soon as the connection has read its first
+data (HTTP's answer, an FTP reply). On a TLS 1.3 connection that is closed
+(`OT_Close()`, or the server's close_notify) and has no ticket, it answers
+NULL. `OT_SessionHasTicket()` says whether a session can resume yet.
+
 The FTPS pattern: the control connection's session, resumed on each data
 connection, which servers such as vsftpd (`require_ssl_reuse`) demand:
 
@@ -350,8 +377,9 @@ it) and are English.
 
 ## OT_GetProtocol, OT_GetCipher, OT_GetALPN
 
-    version = OT_GetProtocol(connection)   LONG: OT_TLS12 etc., 0 before the handshake
-    name = OT_GetCipher(connection)        e.g. "ECDHE-RSA-CHACHA20-POLY1305"
+    version = OT_GetProtocol(connection)   LONG: OT_TLS13, OT_TLS12 etc., 0 before the handshake
+    name = OT_GetCipher(connection)        e.g. "TLS_CHACHA20_POLY1305_SHA256" (TLS 1.3),
+                                           "ECDHE-RSA-CHACHA20-POLY1305" (TLS 1.2)
     name = OT_GetALPN(connection)          the protocol the server chose, or ""
 
 ## OT_GetPeerFingerprint
@@ -402,3 +430,43 @@ Fills `buffer` with cryptographically strong random bytes.
 
 Which maths the x86 or ARM64 cores do on this machine (`OTACC_*`), through
 opencrypto.library; 0 on a real Amiga, where everything runs as 68k code.
+
+## OT_SetVersion (version 1, revision 3)
+
+    result = OT_SetVersion(connection, minVersion, maxVersion)
+    D0                     A0          D0          D1
+
+    LONG OT_SetVersion(struct OTConnection *connection, LONG minVersion, LONG maxVersion);
+
+The protocol versions this connection may use, `OT_TLS10` to `OT_TLS13`, in
+place of the context's (`MinVersion`, `MaxVersion`); 0 keeps the context's
+for that end. `OTERR_ARGS` for a range that is empty or out of bounds.
+Before the handshake only. `OT_SetVersion(connection, 0, OT_TLS12)` is
+the way to leave TLS 1.3 out for a server that mishandles it;
+`OT_SetVersion(connection, OT_TLS13, 0)` refuses anything older
+(`OTERR_VERSION` from a TLS 1.2 server). `OT_GetProtocol()` says which was
+used. Check the revision (`OT_Version() & 0xFFFF` at least 3) before
+calling it.
+
+What TLS 1.3 brings: one round trip less for every full handshake; the
+cipher suites TLS_CHACHA20_POLY1305_SHA256, TLS_AES_128_GCM_SHA256 and
+TLS_AES_256_GCM_SHA384; X25519 (P-256 when the server asks for it);
+certificates with ECDSA, RSA (RSA-PSS signatures) and Ed25519 keys;
+resumption with tickets. Not supported: 0-RTT data and client
+certificates (a server that asks for one gets none).
+
+## OT_SessionHasTicket (version 1, revision 3)
+
+    has = OT_SessionHasTicket(session)
+    D0                        A0
+
+    LONG OT_SessionHasTicket(struct OTSession *session);
+
+1 when `session` (from `OT_GetSession()`) has something to resume with: a
+TLS 1.2 (or older) session ID, or a TLS 1.3 ticket. 0 for a TLS 1.3
+session still waiting for its first ticket (it may get one in a later
+`OT_Read()` on its connection), for one that never will (its connection
+was freed first), and for NULL. A cache can use it to keep only sessions
+that resume, or to take a session again later. Safe from any task while
+the connection is in use. Check the revision (`OT_Version() & 0xFFFF` at
+least 3) before calling it.

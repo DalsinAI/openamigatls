@@ -27,7 +27,7 @@ esac
 SRC="$HERE/src/opencrypto_sha256.c $HERE/src/opencrypto_sha512.c
      $HERE/src/opencrypto_x25519.c $HERE/src/opencrypto_ed25519.c
      $HERE/src/opencrypto_sntrup761.c $HERE/src/opencrypto_chacha20.c
-     $HERE/src/opencrypto_aes.c $HERE/src/opencrypto_pubkey.c"
+     $HERE/src/opencrypto_aes.c $HERE/src/opencrypto_pubkey.c $HERE/src/opencrypto_pss.c"
 
 mkdir -p "$OUT/include/opencrypto" "$OUT/include/libraries" \
          "$OUT/include/inline" "$OUT/include/proto" "$OUT/lib" "$OUT/tests" "$OUT/obj"
@@ -58,7 +58,7 @@ echo "$OUT/lib/opencrypto.library ($(wc -c < "$OUT/lib/opencrypto.library") byte
 
 "$CC" $CFLAGS -noixemul -o "$OUT/tests/OpenCryptoLibTest" "$HERE/tests/test_library.c"
 "$CC" $CFLAGS -noixemul -I"$HERE/tests" -o "$OUT/tests/OpenCryptoVectors" "$HERE/tests/test_ssh_primitives.c" $SRC
-"$CC" $CFLAGS -noixemul -o "$OUT/tests/OpenCryptoBench" "$HERE/tests/bench_library.c" \
+"$CC" $CFLAGS -noixemul -I"$HERE/tests" -o "$OUT/tests/OpenCryptoBench" "$HERE/tests/bench_library.c" \
   "$HERE/src/opencrypto_sha256.c"
 
 if [ -n "${FPCR_CHECK:-}" ]; then

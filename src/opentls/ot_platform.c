@@ -142,6 +142,11 @@ int ot_now(uint32_t *days, uint32_t *seconds)
     return 1;
 }
 
+uint32_t ot_key_update_after(void)
+{
+    return OT_KEY_UPDATE_AFTER;
+}
+
 LONG ot_sock_read(LONG fd, struct Library *socketbase, void *buf, LONG len)
 {
     struct Library *SocketBase = socketbase;
@@ -274,6 +279,12 @@ int ot_now(uint32_t *days, uint32_t *seconds)
     *days = (uint32_t)(t / 86400) + 719528UL;
     *seconds = (uint32_t)(t % 86400);
     return 1;
+}
+
+uint32_t ot_key_update_after(void)
+{
+    const char *n = getenv("OPENTLS_TEST_KEYUPDATE");   /* tests: records per key */
+    return n ? (uint32_t)strtoul(n, NULL, 10) : OT_KEY_UPDATE_AFTER;
 }
 
 LONG ot_sock_read(LONG fd, struct Library *socketbase, void *buf, LONG len)

@@ -1,10 +1,12 @@
-/* opencrypto.library 2.0
+/* opencrypto.library 2.1
  * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Version 2 (8 Oct 2026) adds what SSH needs: X25519, sntrup761, Ed25519,
  * RSA and ECDSA verification, SHA-2 block runs, ChaCha20, Poly1305 and
  * AES. Each goes through a magic function (oc_magic.h): host code on
- * AmigaChrome, the 68k body elsewhere. */
+ * AmigaChrome, the 68k body elsewhere. Revision 1 (20 Oct 2026) adds
+ * RSASSA-PSS verification for TLS 1.3: RSA's magic function, then the
+ * encoding check as 68k code (opencrypto_pss.c, a few hashes). */
 #include <exec/types.h>
 #include <exec/resident.h>
 #include <exec/libraries.h>
@@ -31,7 +33,7 @@ int start(void) { return -1; }
 
 static const char lib_name[] = OPENCRYPTOLIB_NAME;
 static const char lib_id[] =
-    "opencrypto.library 2.0 (8.10.2026) OpenCrypto, AmigaChrome Team\r\n";
+    "opencrypto.library 2.1 (20.10.2026) OpenCrypto, AmigaChrome Team\r\n";
 
 static struct Library *lib_init(REG(d0, struct OpenCryptoLibBase *base),
                                 REG(a0, BPTR seglist),
@@ -65,6 +67,7 @@ DECL(OC_Poly1305, struct OCPolyRequest);
 DECL(OC_AES, struct OCAESRequest);
 DECL(OC_RSAPublic, struct OCRSARequest);
 DECL(OC_ECDSAVerify, struct OCECDSARequest);
+DECL(OC_RSAPSSVerify, struct OCRSAPSSRequest);
 
 static const APTR lib_vectors[] = {
     (APTR)lib_open, (APTR)lib_close, (APTR)lib_expunge, (APTR)lib_null,
@@ -77,6 +80,7 @@ static const APTR lib_vectors[] = {
     (APTR)OC_SNTRUP761KeyPair, (APTR)OC_SNTRUP761Enc, (APTR)OC_SNTRUP761Dec,
     (APTR)OC_SHA256Blocks, (APTR)OC_SHA512Blocks, (APTR)OC_ChaCha20, (APTR)OC_Poly1305,
     (APTR)OC_AES, (APTR)OC_RSAPublic, (APTR)OC_ECDSAVerify,
+    (APTR)OC_RSAPSSVerify,
     (APTR)-1
 };
 
@@ -338,4 +342,28 @@ DECL(OC_ECDSAVerify, struct OCECDSARequest)
     if (!r || !r->qx || !r->qy || !r->r || !r->s || !r->hash) return 0;
     if (!stack_ok(8192)) return OCERR_STACK;
     return ocm_ecdsa_verify(r->curve, r->qx, r->qy, r->r, r->s, r->hash, r->hash_length);
+}
+
+static void pss_sha256(const void *d, size_t l, uint8_t *o) { oc_sha256(d, l, o); }
+static void pss_sha384(const void *d, size_t l, uint8_t *o) { oc_sha384(d, l, o); }
+static void pss_sha512(const void *d, size_t l, uint8_t *o) { oc_sha512(d, l, o); }
+
+DECL(OC_RSAPSSVerify, struct OCRSAPSSRequest)
+{
+    UBYTE em[OC_RSA_MAX_BYTES];
+    const UBYTE *n, *sig;
+    ULONG len, bits;
+    oc_hash_fn h;
+    (void)base;
+    if (!r || !r->sig || !r->n || !r->e || !r->hash) return 0;
+    h = r->hash_length == 32 ? pss_sha256 : r->hash_length == 48 ? pss_sha384
+      : r->hash_length == 64 ? pss_sha512 : NULL;
+    if (!h) return 0;
+    if (!stack_ok(16384)) return OCERR_STACK;
+    n = r->n; sig = r->sig; len = r->n_length;
+    while (len && !n[0]) { ++n; ++sig; --len; }
+    if (!len || len > sizeof em) return 0;
+    if (ocm_rsa_public(em, sig, n, len, r->e, r->e_length)) return 0;
+    for (bits = 8 * len; !(n[0] & (0x80 >> (8 * len - bits))); --bits) {}
+    return oc_emsa_pss_verify(em, len, bits, r->hash, r->hash_length, r->salt_length, h);
 }

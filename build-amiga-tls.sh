@@ -81,7 +81,9 @@ for p in $PIDS; do wait "$p" || FAILED=1; done
 mv -f "$OUT/lib/libbearssl68k.a.new" "$OUT/lib/libbearssl68k.a"
 
 OTSRC="$HERE/src/opentls/ot_core.c $HERE/src/opentls/ot_glue.c $HERE/src/opentls/ot_platform.c
-       $HERE/src/opentls/ot_random.c $HERE/src/opentls/ot_trust.c $HERE/src/opentls/ot_x509.c"
+       $HERE/src/opentls/ot_random.c $HERE/src/opentls/ot_trust.c $HERE/src/opentls/ot_x509.c
+       $HERE/src/opentls/ot_tls13.c $HERE/src/opentls/ot_tls13_keys.c $HERE/src/opentls/ot_tls13_bridge.c
+       $HERE/src/opencrypto_pss.c"
 WARN="-Wall -Wextra -Werror -Wno-unused-parameter"
 
 "$CC" $BASE $BRDEFS $WARN $INC -mcrt=nix20 -fno-toplevel-reorder -nostartfiles \

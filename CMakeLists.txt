@@ -8,7 +8,7 @@ add_library(opencrypto STATIC
     src/opencrypto_sha256.c src/opencrypto_sha512.c
     src/opencrypto_x25519.c src/opencrypto_ed25519.c
     src/opencrypto_sntrup761.c src/opencrypto_chacha20.c
-    src/opencrypto_aes.c src/opencrypto_pubkey.c)
+    src/opencrypto_aes.c src/opencrypto_pubkey.c src/opencrypto_pss.c)
 target_include_directories(opencrypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(test_opencrypto tests/test_opencrypto.c)
@@ -44,7 +44,8 @@ target_include_directories(bearssl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_part
 
 add_library(opentls STATIC
     src/opentls/ot_core.c src/opentls/ot_glue.c src/opentls/ot_platform.c
-    src/opentls/ot_random.c src/opentls/ot_trust.c src/opentls/ot_x509.c)
+    src/opentls/ot_random.c src/opentls/ot_trust.c src/opentls/ot_x509.c
+    src/opentls/ot_tls13.c src/opentls/ot_tls13_keys.c src/opentls/ot_tls13_bridge.c)
 target_include_directories(opentls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/host/include
                                           ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)
@@ -60,7 +61,13 @@ target_include_directories(test_opentls_units PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
                                                       ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)
 target_link_libraries(test_opentls_units PRIVATE opentls)
 
+add_executable(test_tls13_vectors tests/test_tls13_vectors.c)
+target_include_directories(test_tls13_vectors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/opentls
+                                                      ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)
+target_link_libraries(test_tls13_vectors PRIVATE opentls)
+
 add_test(NAME opentls_units COMMAND test_opentls_units)
+add_test(NAME opentls_tls13_vectors COMMAND test_tls13_vectors)
 if(Python3_FOUND)
     add_test(NAME opentls_ca_bundle
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ca_bundle.py

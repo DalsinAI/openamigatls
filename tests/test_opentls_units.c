@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ot_internal.h"
+#include "ot_tls13.h"
 #include <clib/opentls_protos.h>
 
 static int failures;
@@ -208,7 +209,13 @@ static void test_api(void)
     cfg.Size = sizeof cfg;
     cfg.Flags = OTCF_NO_SYSTEM_TRUST;
     cfg.MinVersion = OT_TLS13;
-    CHECK(!OT_NewContext(&cfg, &err) && err == OTERR_UNSUPPORTED, "TLS 1.3 minimum refused for now");
+    x = OT_NewContext(&cfg, &err);
+    CHECK(x && err == OTERR_OK && x->min_version == OT_TLS13 && x->max_version == OT_TLS13, "TLS 1.3 minimum");
+    OT_FreeContext(x);
+    cfg.MinVersion = 0;
+    x = OT_NewContext(&cfg, &err);
+    CHECK(x && x->min_version == OT_TLS12 && x->max_version == OT_TLS13, "default range: TLS 1.2 to 1.3");
+    OT_FreeContext(x);
     cfg.MinVersion = OT_TLS12;
     cfg.MaxVersion = OT_TLS11;
     CHECK(!OT_NewContext(&cfg, &err) && err == OTERR_ARGS, "bad range");
@@ -221,6 +228,13 @@ static void test_api(void)
     c = OT_NewConnection(x, (CONST_STRPTR)"192.168.1.20", &err);
     CHECK(c && c->ip_len == 4 && c->ip[3] == 20, "IPv4 address");
     CHECK(c && c->alpn_count == 2 && !strcmp(c->alpn_names[1], "http/1.1"), "ALPN list from the context");
+    CHECK(c && c->min_version == OT_TLS12 && c->max_version == OT_TLS13, "the context's range");
+    CHECK(OT_SetVersion(c, OT_TLS13, OT_TLS12) == OTERR_ARGS, "OT_SetVersion: a bad range");
+    CHECK(OT_SetVersion(c, 0x0305, 0) == OTERR_ARGS, "OT_SetVersion: past TLS 1.3");
+    CHECK(OT_SetVersion(c, 0, OT_TLS12) == OTERR_OK && c->min_version == OT_TLS12
+          && c->max_version == OT_TLS12, "OT_SetVersion: TLS 1.2 at most");
+    CHECK(OT_SetVersion(c, OT_TLS13, 0) == OTERR_OK && c->min_version == OT_TLS13
+          && c->max_version == OT_TLS13, "OT_SetVersion: TLS 1.3 only");
     CHECK(OT_Read(c, &err, 1) == OTERR_STATE, "read before handshake");
     CHECK(OT_Handshake(c) == OTERR_STATE, "handshake without a socket");
     OT_FreeConnection(c);
@@ -237,6 +251,22 @@ static void test_api(void)
         CHECK(OT_SetSession(c, &s) == OTERR_ARGS, "session for another host refused");
         strcpy(s.host, "FTP.example.org");
         CHECK(OT_SetSession(c, &s) == OTERR_OK, "session for the same host");
+        /* OT_SessionHasTicket: a TLS 1.2 session ID, or a TLS 1.3 ticket */
+        CHECK(OT_SessionHasTicket(NULL) == 0, "no session: no ticket");
+        CHECK(OT_SessionHasTicket(&s) == 0, "a TLS 1.3 session still waiting: no ticket");
+        CHECK(c->offer13 == NULL, "a waiting session offers no ticket");
+        s.params.session_id_len = 32;
+        CHECK(OT_SessionHasTicket(&s) == 1, "a TLS 1.2 session ID");
+        s.params.session_id_len = 0;
+        s.t13 = ot_alloc(sizeof *s.t13 + 16);
+        if (s.t13) {
+            s.t13->suite = OT13_AES_128_GCM_SHA256;
+            s.t13->len = 16;
+            CHECK(OT_SessionHasTicket(&s) == 1, "a TLS 1.3 ticket");
+            CHECK(OT_SetSession(c, &s) == OTERR_OK && c->offer13 && c->offer13 != s.t13
+                  && c->offer13->len == 16, "the ticket copied for offering");
+            ot_free(s.t13);
+        }
     }
     OT_FreeConnection(c);
     CHECK(OT_NewConnection(x, (CONST_STRPTR)"fe80::zz", &err) == NULL && err == OTERR_ARGS, "bad address");

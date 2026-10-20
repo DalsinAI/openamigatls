@@ -14,6 +14,8 @@
  *   AES           FIPS 197 appendix C (128, 192, 256), and each mode's
  *                 round trip
  *   RSA           a 2048-bit public operation against Python's pow()
+ *   RSASSA-PSS    signatures made by Python's cryptography package (SHA-256
+ *                 and SHA-384, a 2048- and a 2049-bit key), and altered copies
  *   ECDSA         a P-256 signature from RFC 6979 section A.2.5
  * Copyright (c) 2026 AmigaChrome Team. MIT. */
 #include "opencrypto/opencrypto.h"
@@ -269,6 +271,28 @@ static void test_rsa(void)
     check(oc_rsa_public(out, n, n, 256, e, 3) == -1, "RSA refuses sig >= n");
 }
 
+static void test_rsa_pss(void)
+{
+    static uint8_t n[257], sig[257], h[48];
+    static const uint8_t e[3] = { 1, 0, 1 };
+    unhex(n, OC_TEST_PSS2048_N);
+    unhex(sig, OC_TEST_PSS2048_SIG);
+    unhex(h, OC_TEST_PSS2048_HASH);
+    check(oc_rsa_pss_verify(sig, n, 256, e, 3, h, 32, 32) == 1, "RSASSA-PSS 2048 bits, SHA-256");
+    check(oc_rsa_pss_verify(sig, n, 256, e, 3, h, 32, -1) == 1, "RSASSA-PSS, any salt length");
+    check(oc_rsa_pss_verify(sig, n, 256, e, 3, h, 32, 20) == 0, "RSASSA-PSS, another salt length: refused");
+    h[5] ^= 0x10;
+    check(oc_rsa_pss_verify(sig, n, 256, e, 3, h, 32, 32) == 0, "RSASSA-PSS with the hash altered: refused");
+    h[5] ^= 0x10;
+    sig[100] ^= 1;
+    check(oc_rsa_pss_verify(sig, n, 256, e, 3, h, 32, 32) == 0, "RSASSA-PSS with the signature altered: refused");
+    unhex(n, OC_TEST_PSS2049_N);
+    unhex(sig, OC_TEST_PSS2049_SIG);
+    unhex(h, OC_TEST_PSS2049_HASH);
+    check(oc_rsa_pss_verify(sig, n, 257, e, 3, h, 48, 48) == 1, "RSASSA-PSS 2049 bits, SHA-384");
+    check(oc_rsa_pss_verify(sig, n, 257, e, 3, h, 32, 32) == 0, "RSASSA-PSS, the hash taken as SHA-256: refused");
+}
+
 static void test_ecdsa(void)
 {
     /* RFC 6979 A.2.5 (P-256), SHA-256, message "sample" */
@@ -300,6 +324,7 @@ int main(int argc, char **argv)
     test_sntrup761();
     test_aes();
     test_rsa();
+    test_rsa_pss();
     test_ecdsa();
     printf("OpenCrypto SSH primitives: %d of %d checks passed\n", checks - failures, checks);
     return failures ? 20 : 0;

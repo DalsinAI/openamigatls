@@ -132,6 +132,23 @@ int oc_ecdsa_verify(int curve, const uint8_t *qx, const uint8_t *qy,
                     const uint8_t *r, const uint8_t *s,
                     const uint8_t *hash, size_t hash_length);
 
+/* RSASSA-PSS verification (RFC 8017 section 8.1.2), as TLS 1.3 uses it
+ * (rsa_pss_rsae_*): MGF1 with the message's own hash, which hash_length
+ * names (32 SHA-256, 48 SHA-384, 64 SHA-512). salt_length is the salt's
+ * length, or -1 for any (TLS 1.3 wants the hash's length). 1 when sig is
+ * a signature of the hash mhash under (n, e), 0 when not.
+ * oc_emsa_pss_verify() is the encoding check alone, on em = sig^e mod n
+ * (em_length bytes, the modulus mod_bits long), with the hash as a
+ * function, for callers that do the RSA operation and hashing their own
+ * way. Public values only: not constant time. (20 October 2026) */
+typedef void (*oc_hash_fn)(const void *data, size_t length, uint8_t *out);
+int oc_rsa_pss_verify(const uint8_t *sig, const uint8_t *n, size_t n_length,
+                      const uint8_t *e, size_t e_length,
+                      const uint8_t *mhash, size_t hash_length, long salt_length);
+int oc_emsa_pss_verify(const uint8_t *em, size_t em_length, size_t mod_bits,
+                       const uint8_t *mhash, size_t hash_length, long salt_length,
+                       oc_hash_fn hash);
+
 /* What opencrypto.library's OC_Accelerated() answers: the operations this
  * machine runs as host code (AmigaChrome's AC090); 0 on a real Amiga. */
 #define OCF_X25519    (1u << 0)

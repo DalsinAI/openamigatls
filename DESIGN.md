@@ -136,9 +136,9 @@ in A0, as version 1's calls).
 - **Engine.** BearSSL 0.6 (MIT, `third_party/bearssl`, unchanged;
   `THIRD_PARTY_NOTICES.md`). An earlier branch built on wolfSSL, which is
   GPLv3-or-later: an MIT library cannot ship it, so the user chose BearSSL.
-  BearSSL speaks TLS 1.0 to 1.2; TLS 1.3 comes later on OpenCrypto's
-  primitives behind the same calls (`docs/AutoDocs-OpenTLS.md`, API
-  version 1, frozen in #7).
+  BearSSL speaks TLS 1.0 to 1.2; TLS 1.3 is our own code behind the same
+  calls (section 10; `docs/AutoDocs-OpenTLS.md`, API version 1, frozen in
+  #7).
 - **Layers.** `src/opentls/ot_core.c` is the API over BearSSL's client
   engine; `ot_x509.c` wraps BearSSL's "minimal" X.509 engine (chain,
   dates, DNS names) and adds the server's certificate and fingerprint for
@@ -193,3 +193,96 @@ in A0, as version 1's calls).
   does), each case with and without offload, on the machine's loopback
   only. `tests/lab/lab_amiga.sh` runs the same programs on the Amiga in a
   lab.
+
+## 10. OpenTLS 1.3: TLS 1.3 (20 October 2026)
+
+TLS 1.3 saves one round trip on every full handshake, which is what the
+browser on a 68040 notices most. BearSSL 0.6 has no TLS 1.3, so the client
+is our own, written from RFC 8446 (MIT, no code from another TLS library),
+over the primitives the TLS 1.2 path already uses.
+
+- **Files.** `src/opentls/ot_tls13.c` is the handshake, the records and
+  what follows (tickets, KeyUpdate, alerts, close_notify);
+  `ot_tls13_keys.c` the key schedule (HKDF over BearSSL's HMAC) and the
+  record protection: AES-GCM put together from the connection's AES-CTR
+  and GHASH tables, ChaCha20-Poly1305 from its ChaCha20 and Poly1305
+  tables, so `ot_glue.c` picks OpenCrypto or BearSSL's 68k code exactly as
+  for TLS 1.2; `ot_tls13_bridge.c` the hand-over to BearSSL.
+- **What it does.** X25519 key share in the first ClientHello; P-256 only
+  after a HelloRetryRequest (a P-256 share costs a scalar multiplication
+  in 68k code that is wasted whenever the server takes X25519, which they
+  nearly all do); cookies. The three TLS 1.3 suites, ChaCha20 first (no
+  AES hardware on a 68040). CertificateVerify with ECDSA (P-256, P-384,
+  P-521), RSA-PSS (rsa_pss_rsae_sha256/384/512; RSASSA-PSS is new in
+  OpenCrypto 2.1, `src/opencrypto_pss.c`, built into opentls.library too)
+  and Ed25519. The chain and the host name go through the same X.509
+  wrapper and trust store as TLS 1.2. ALPN, SNI, tickets with PSK-DHE,
+  KeyUpdate both ways (ours after 2^23 records), the middlebox
+  compatibility mode. No 0-RTT, no client certificates.
+- **One ClientHello for both versions, no second connect.** BearSSL is set
+  up and reset as for TLS 1.2, so it makes its ClientHello and then waits
+  for the ServerHello. That ClientHello is dropped; ours goes instead,
+  with BearSSL's client random and session ID (a TLS 1.2 session offered
+  for resumption stays offered), BearSSL's TLS 1.2 suites after the TLS
+  1.3 ones, and only extensions whose answers BearSSL accepts (no
+  extended master secret, session_ticket or status_request), and
+  BearSSL's running handshake hash is reset to the hash of ours. If the
+  ServerHello says TLS 1.3, BearSSL is never used again. If it says TLS
+  1.2 (after the RFC 8446 downgrade check), the bridge feeds the server's
+  records to BearSSL, rebuilt so each holds whole handshake messages, and
+  BearSSL carries on as if it had sent that ClientHello. The cost is one
+  ClientHello a little larger than BearSSL's own, and nothing else: no
+  extra round trip and no reconnect.
+- **RSA-PSS on TLS 1.2.** Offering RSA-PSS (TLS 1.3 needs it) lets a TLS
+  1.2 server sign its ServerKeyExchange with it, which BearSSL 0.6 cannot
+  check. The bridge checks it (the randoms and ECDH parameters, under the
+  key BearSSL took from the validated certificate), hands BearSSL the
+  message with that hash in place of the signature and a verifier that
+  accepts it for that one message, then sets BearSSL's handshake hash back
+  to the hash of the message as sent, so both Finished messages are right.
+  After the server's ChangeCipherSpec the bridge ends and records go to
+  BearSSL as they come.
+- **Ed25519 certificates.** BearSSL's minimal X.509 engine cannot read an
+  Ed25519 key. For TLS 1.3 the wrapper holds the leaf back; an Ed25519
+  leaf has the engine validate the chain from the next certificate (or is
+  matched to a trust anchor by its issuer) and is checked itself: its
+  signature under the issuer's key, dates, names, addresses. The TLS 1.2
+  path does not take Ed25519 (BearSSL would not), nor do Ed25519 CA keys.
+- **Memory.** No new per-connection buffer. Until the ServerHello, records
+  come into BearSSL's buffer (BearSSL holds nothing while it waits) and
+  leave from the 4 KB gathering buffer; once TLS 1.3 is chosen, BearSSL's
+  buffer holds the record being read and, with the default buffers, the
+  records being written. The fall-back to TLS 1.2 borrows 17 KB for the
+  handshake only. Handshake messages longer than a record are put
+  together in a buffer of their length (64 KB at most).
+- **Sessions.** TLS 1.3 servers send tickets after the handshake. Callers
+  such as curl's session cache take a session once, right after the
+  handshake, so `OT_GetSession()` answers a session that waits: the first
+  ticket `OT_Read()` brings fills it in place (a lock covers the waiting
+  lists, since sessions are handed between tasks). `OT_SetSession()` then
+  offers the ticket, with the binder over the ClientHello; after a
+  HelloRetryRequest it is offered again only if its hash suits the suite
+  chosen. `OT_SessionHasTicket()` (revision 3) tells a cache whether a
+  session can resume yet: 1 for a TLS 1.2 session ID or a TLS 1.3 ticket,
+  0 for a session still waiting (curl's backend uses it to decide when a
+  session is worth keeping).
+- **API.** Compatible: `MaxVersion` 0 now means TLS 1.3, `MinVersion`
+  `OT_TLS13` is accepted, `OT_GetProtocol()` answers `OT_TLS13`, and the
+  new `OT_SetVersion()` and `OT_SessionHasTicket()` (revision 3, at the
+  end of the table) set one connection's range and say whether a session
+  can resume.
+- **Size.** opentls.library (GCC 16, 68040) grows from 150540 to 189624
+  bytes (+39084): the TLS 1.3 client about 22 KB, the key schedule and
+  records 3 KB, the bridge 2 KB, the Ed25519 leaf checks 4 KB, RSA-PSS
+  1 KB. No more of BearSSL is linked than before.
+- **Tests.** `tests/test_tls13_vectors.c` checks the key schedule, the
+  records, Finished, the ticket PSK, the binder, the HelloRetryRequest
+  transcript and the RSA-PSS CertificateVerify against RFC 8448, with both
+  function tables. `tests/test_tls_local.py` runs every TLS 1.2 case
+  through the bridge (s_server -no_tls1_3) and adds the TLS 1.3 matrix:
+  each suite, HelloRetryRequest (with a cookie), ECDSA, RSA-PSS and Ed25519
+  certificates, a wrong name and an untrusted chain, ticket resumption,
+  KeyUpdate from either side, 1 MB transfers, I/O in 7-byte pieces with
+  every other call refused, non-blocking sockets. All of it also runs
+  clean under AddressSanitizer and UndefinedBehaviorSanitizer (with
+  BearSSL built for aligned access).

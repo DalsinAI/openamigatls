@@ -112,6 +112,23 @@ static int g_ecdsa(int curve, const unsigned char *qx, const unsigned char *qy,
     return OC_ECDSAVerify(&r);
 }
 
+/* Ed25519 for TLS 1.3 server certificates: opencrypto.library's, whether
+ * or not the host runs it, since BearSSL has none */
+int ot_glue_has_ed25519(void)
+{
+    oc_open();
+    return OpenCryptoBase != NULL;
+}
+
+int ot_glue_ed25519(const unsigned char *sig, const unsigned char *pk, const void *msg, size_t len)
+{
+    struct OCEd25519Request r;
+    oc_open();
+    if (!OpenCryptoBase) return 0;
+    r.sig = sig; r.pk = pk; r.msg = msg; r.length = (ULONG)len;
+    return OC_Ed25519Verify(&r) == 1;
+}
+
 ULONG ot_glue_accelerated(void)
 {
     ULONG f = 0;
@@ -153,6 +170,10 @@ static int g_ecdsa(int curve, const unsigned char *qx, const unsigned char *qy,
                    const unsigned char *rr, const unsigned char *ss,
                    const unsigned char *hash, size_t hlen)
 { return oc_ecdsa_verify(curve, qx, qy, rr, ss, hash, hlen); }
+
+int ot_glue_has_ed25519(void) { return 1; }
+int ot_glue_ed25519(const unsigned char *sig, const unsigned char *pk, const void *msg, size_t len)
+{ return oc_ed25519_verify(sig, pk, msg, len) == 1; }
 
 ULONG ot_glue_accelerated(void)
 {
@@ -209,6 +230,7 @@ static void sha_update(const br_hash_class **ctx, const void *data, size_t len)
     ot_sha_context *c = (ot_sha_context *)(void *)ctx;
     const unsigned char *p = data;
     size_t bl = sha_block(c), ptr = (size_t)c->count & (bl - 1), n;
+    if (!len) return;                 /* BearSSL's HMAC-DRBG hands over (NULL, 0) */
     c->count += len;
     if (ptr) {
         n = bl - ptr < len ? bl - ptr : len;
