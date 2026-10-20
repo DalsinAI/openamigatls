@@ -230,6 +230,7 @@ static void sha_update(const br_hash_class **ctx, const void *data, size_t len)
     ot_sha_context *c = (ot_sha_context *)(void *)ctx;
     const unsigned char *p = data;
     size_t bl = sha_block(c), ptr = (size_t)c->count & (bl - 1), n;
+    if (!len) return;                 /* BearSSL's HMAC-DRBG hands over (NULL, 0) */
     c->count += len;
     if (ptr) {
         n = bl - ptr < len ? bl - ptr : len;
