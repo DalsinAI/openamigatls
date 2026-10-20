@@ -23,6 +23,11 @@
  *     --print          print what --send brought back (the first 64 KB)
  *     --trace          with --hook: each read and write, timed (where a
  *                      handshake's time goes)
+ *     --chunk N        with --hook: at most N bytes a call, and every other
+ *                      call OTERR_WOULDBLOCK (partial and refused I/O)
+ *     --version MIN,MAX  OT_SetVersion() on each connection (0: the context's)
+ *     --upload N       write N bytes before --send (KeyUpdate, large writes)
+ *     --converse       answer each PING read with PONG (KeyUpdate tests)
  * Prints key=value lines; exit code 0 when all went as asked.
  *
  * MIT licensed and free. Copyright (c) 2026 AmigaChrome Team. */
@@ -65,7 +70,9 @@ static struct timerequest treq;
 
 static const char *opt_ca, *opt_trust, *opt_pin, *opt_sni, *opt_alpn, *opt_send, *opt_expect;
 static int opt_nosys, opt_verify, opt_min, opt_max, opt_conns = 1, opt_nooff, opt_small,
-           opt_hook, opt_nonblock, opt_repeat = 0, opt_trace, opt_print;
+           opt_hook, opt_nonblock, opt_repeat = 0, opt_trace, opt_print, opt_chunk, opt_converse,
+           opt_setversion, opt_vmin, opt_vmax;
+static long opt_upload;
 static double trace_t0;
 
 static double now_ms(void)
@@ -149,11 +156,16 @@ static ULONG hook_io(struct Hook *h, APTR obj, APTR msgp)
 #ifndef __amigaos__
     struct OTIOMessage *m = msgp;
 #endif
-    long s = (long)h->h_Data, n;
+    long s = (long)h->h_Data, n, len = m->Length;
     double before = opt_trace ? now_ms() : 0;
+    static unsigned long calls;
     (void)obj;
-    if (m->MethodID == OTIO_READ) n = recv(s, m->Buffer, m->Length, 0);
-    else n = send(s, m->Buffer, m->Length, 0);
+    if (opt_chunk) {
+        if (++calls & 1) return (ULONG)OTERR_WOULDBLOCK;
+        if (len > opt_chunk) len = opt_chunk;
+    }
+    if (m->MethodID == OTIO_READ) n = recv(s, m->Buffer, len, 0);
+    else n = send(s, m->Buffer, len, 0);
     if (opt_trace)
         printf("trace %8.2f %s %ld (%.2f ms in the call)\n", before - trace_t0,
                m->MethodID == OTIO_READ ? "read " : "write", n, now_ms() - before);
@@ -171,6 +183,14 @@ static void unescape(char *d, const char *s)
     *d = 0;
 }
 
+static int has_ping(const char *p, long n)
+{
+    long i;
+    for (i = 0; i + 4 <= n; ++i)
+        if (!memcmp(p + i, "PING", 4)) return 1;
+    return 0;
+}
+
 static int hexpin(const char *s, UBYTE *out)
 {
     int i;
@@ -184,6 +204,7 @@ static int hexpin(const char *s, UBYTE *out)
 
 static int version_of(const char *s)
 {
+    if (!strcmp(s, "0")) return 0;
     return !strcmp(s, "10") ? OT_TLS10 : !strcmp(s, "11") ? OT_TLS11
          : !strcmp(s, "12") ? OT_TLS12 : !strcmp(s, "13") ? OT_TLS13 : -1;
 }
@@ -217,6 +238,12 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
     if (opt_alpn) OT_SetALPN(c, (CONST_STRPTR)opt_alpn);
     if (opt_verify) OT_SetVerify(c, opt_verify);
     if (opt_pin) { if (!hexpin(opt_pin, pin)) return 0; OT_PinCertificate(c, pin); }
+    if (opt_setversion && (rc = OT_SetVersion(c, opt_vmin, opt_vmax)) != OTERR_OK) {
+        printf("conn%d.setversion=%ld\n", index, (long)rc);
+        OT_FreeConnection(c);
+        CLOSESOCK(s);
+        return 0;
+    }
     if (*session) OT_SetSession(c, *session);
     t0 = trace_t0 = now_ms();
     while ((rc = OT_Handshake(c)) == OTERR_WOULDBLOCK) wait_socket(s);
@@ -240,6 +267,19 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
            index, index, (unsigned long)OT_GetProtocol(c), index, (const char *)OT_GetCipher(c),
            index, (const char *)OT_GetALPN(c), index, (long)OT_SessionResumed(c), index, t1 - t0);
     if (!*session) *session = OT_GetSession(c);
+    if (opt_upload > 0) {
+        static char block[20000];
+        long sent = 0, n;
+        for (i = 0; i < (int)sizeof block; ++i) block[i] = (char)('a' + i % 26);
+        while (sent < opt_upload) {
+            long want = opt_upload - sent < (long)sizeof block ? opt_upload - sent : (long)sizeof block;
+            n = OT_Write(c, block, (LONG)want);
+            if (n == OTERR_WOULDBLOCK) { wait_socket(s); continue; }
+            if (n <= 0) { printf("conn%d.upload=%ld\n", index, n); ok = 0; break; }
+            sent += n;
+        }
+        printf("conn%d.uploaded=%ld\n", index, sent);
+    }
     if (opt_send) {
         static char out[1024], in[65536];
         long got = 0, n;
@@ -263,6 +303,11 @@ static int one_connection(struct OTContext *ctx, const char *host, const char *n
                     ok = 0;
                 }
                 break;
+            }
+            if (opt_converse && has_ping(dst, n)) {
+                long w;
+                while ((w = OT_Write(c, "PONG\n", 5)) == OTERR_WOULDBLOCK) wait_socket(s);
+                if (w != 5) { printf("conn%d.pong=%ld\n", index, w); ok = 0; }
             }
             got += n;
         }
@@ -312,6 +357,18 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--nonblock")) opt_nonblock = 1;
         else if (!strcmp(a, "--trace")) opt_trace = 1;
         else if (!strcmp(a, "--print")) opt_print = 1;
+        else if (!strcmp(a, "--chunk") && v) { opt_chunk = atoi(v); ++i; }
+        else if (!strcmp(a, "--upload") && v) { opt_upload = atol(v); ++i; }
+        else if (!strcmp(a, "--converse")) opt_converse = 1;
+        else if (!strcmp(a, "--version") && v && strchr(v, ',')) {
+            char tmp[16];
+            snprintf(tmp, sizeof tmp, "%s", v);
+            *strchr(tmp, ',') = 0;
+            opt_vmin = version_of(tmp);
+            opt_vmax = version_of(strchr(v, ',') + 1);
+            opt_setversion = 1;
+            ++i;
+        }
         else if (!host) host = a;
         else port = atoi(a);
     }

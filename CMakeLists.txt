@@ -61,7 +61,13 @@ target_include_directories(test_opentls_units PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
                                                       ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)
 target_link_libraries(test_opentls_units PRIVATE opentls)
 
+add_executable(test_tls13_vectors tests/test_tls13_vectors.c)
+target_include_directories(test_tls13_vectors PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/opentls
+                                                      ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bearssl/src)
+target_link_libraries(test_tls13_vectors PRIVATE opentls)
+
 add_test(NAME opentls_units COMMAND test_opentls_units)
+add_test(NAME opentls_tls13_vectors COMMAND test_tls13_vectors)
 if(Python3_FOUND)
     add_test(NAME opentls_ca_bundle
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ca_bundle.py

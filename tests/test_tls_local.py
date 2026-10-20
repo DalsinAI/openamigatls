@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """OpenTLS against local servers only (no internet): openssl s_server for
 TLS, tests/ftps_server.py for FTPS. Makes its own test PKI with the openssl
-command (a root CA, an intermediate, leaves good, wrong-named, expired and
-self-signed) in OPENTLS_TEST_DIR (default ./tls-local), then runs each case
-with OpenCrypto doing the maths and again with OTCF_NO_OFFLOAD.
+command (a root CA, an intermediate, leaves good, wrong-named, expired,
+self-signed and Ed25519) in OPENTLS_TEST_DIR (default ./tls-local), then
+runs each case with OpenCrypto doing the maths and again with
+OTCF_NO_OFFLOAD. TLS 1.3 is what s_server and OpenTLS agree on unless a
+case says otherwise; the TLS 1.2 cases give s_server -no_tls1_3, so they
+go through the hand-over to BearSSL (ot_tls13_bridge.c).
 
   test_tls_local.py opentls_client opentls_ftps_get
 
@@ -12,6 +15,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 
 CLIENT, FTPSGET = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
@@ -62,6 +66,12 @@ def make_pki():
     leaf("rsaleaf", ["rsa:2048"], "root", "localhost.ext", ("-days", "365"))
     leaf("nameonly", ec256, "inter", "nameonly.ext", ("-days", "365"))
     leaf("wrong", ec256, "inter", "wrong.ext", ("-days", "365"))
+    # Ed25519 leaves (TLS 1.3 only): under the intermediate, and straight under the root
+    leaf("edleaf", ["ed25519"], "inter", "localhost.ext", ("-days", "365"))
+    sh("openssl", "x509", "-req", "-in", "edleaf.csr", "-CA", "root.pem", "-CAkey", "root.key",
+       "-CAcreateserial", "-out", "edroot.pem", "-sha256", "-extfile", "localhost.ext", "-days", "365")
+    with open(os.path.join(WORK, "edroot.key"), "w") as f:
+        f.write(open(os.path.join(WORK, "edleaf.key")).read())
     # expired: "openssl x509 -not_before" needs OpenSSL 3.4, so sign it with "openssl ca", which
     # takes fixed dates on every OpenSSL 3 (the CI runner has 3.0)
     ext("ca.cnf", "[ca]\ndefault_ca=tca\n[tca]\ndatabase=index.txt\nnew_certs_dir=.\nserial=ca.serial\n"
@@ -77,7 +87,7 @@ def make_pki():
        "-keyout", "self.key", "-out", "self.pem", "-days", "365", "-subj", "/CN=localhost",
        "-addext", "subjectAltName=DNS:localhost")
     # a chain file for each leaf under the intermediate
-    for name in ("ecleaf", "nameonly", "wrong", "expired"):
+    for name in ("ecleaf", "nameonly", "wrong", "expired", "edleaf"):
         with open(os.path.join(WORK, name + "-chain.pem"), "w") as f:
             f.write(open(os.path.join(WORK, "inter.pem")).read())
     with open(os.path.join(WORK, "big.bin"), "wb") as f:
@@ -111,7 +121,7 @@ class Server:
     def __init__(self, leaf, extra=(), chain=True, www="-www"):
         self.port = free_port()
         args = ["openssl", "s_server", "-quiet", "-accept", str(self.port), "-cert", leaf + ".pem",
-                "-key", leaf + ".key", www]
+                "-key", leaf + ".key"] + ([www] if www else [])
         if chain and os.path.exists(os.path.join(WORK, leaf + "-chain.pem")):
             args += ["-cert_chain", leaf + "-chain.pem"]
         args += list(extra)
@@ -160,6 +170,7 @@ def run_case(name, server, client_args, expect, env, host):
 
 
 CA = ["--ca", "root.pem", "--no-system"]
+NO13 = ["-no_tls1_3"]
 WWW_HEADER = "HTTP/1.0 200 ok\r\nContent-type: text/plain\r\n\r\n"     # what s_server -WWW sends first
 
 
@@ -173,28 +184,93 @@ def main():
     os.chdir(WORK)
     get = ["--send", "GET / HTTP/1.0\\r\\n\\r\\n"]
 
-    case("TLS 1.2, ECDSA chain (P-256 leaf, P-384 intermediate, RSA root)", Server("ecleaf"),
+    case("TLS 1.2, ECDSA chain (P-256 leaf, P-384 intermediate, RSA root)", Server("ecleaf", NO13),
          CA + get + ["--expect", "TLSv1.2"], {"result": "ok", "conn0.protocol": "0303"})
-    case("session resumption by session ID (3 connections)", Server("ecleaf"),
+    case("TLS 1.2 only in OpenTLS (BearSSL alone)", Server("ecleaf"),
+         CA + get + ["--max", "12", "--expect", "TLSv1.2"], {"result": "ok", "conn0.protocol": "0303"})
+    case("session resumption by session ID (3 connections)", Server("ecleaf", NO13),
          CA + ["--connections", "3"], {"result": "ok", "conn0.resumed": "0", "conn1.resumed": "1",
                                         "conn2.resumed": "1"})
-    case("server without a session cache: full handshakes", Server("ecleaf", ["-no_cache"]),
+    case("server without a session cache: full handshakes", Server("ecleaf", NO13 + ["-no_cache"]),
          CA + ["--connections", "2"], {"result": "ok", "conn1.resumed": "0"})
-    case("RSA leaf, ECDHE-RSA", Server("rsaleaf"), CA, {"result": "ok", "conn0.cipher": "ECDHE-RSA-CHACHA20-POLY1305"})
-    case("RSA key exchange (AES128-GCM-SHA256)", Server("rsaleaf", ["-cipher", "AES128-GCM-SHA256"]),
+    case("RSA leaf, ECDHE-RSA (the server signs with RSA-PSS)", Server("rsaleaf", NO13), CA + get,
+         {"result": "ok", "conn0.cipher": "ECDHE-RSA-CHACHA20-POLY1305"})
+    case("RSA leaf, ECDHE-RSA signed with PKCS #1", Server("rsaleaf", NO13 + ["-sigalgs", "RSA+SHA256"]),
+         CA + get, {"result": "ok", "conn0.cipher": "ECDHE-RSA-CHACHA20-POLY1305"})
+    case("RSA key exchange (AES128-GCM-SHA256)", Server("rsaleaf", NO13 + ["-cipher", "AES128-GCM-SHA256"]),
          CA + get, {"result": "ok", "conn0.cipher": "AES128-GCM-SHA256"})
-    case("AES-128-GCM", Server("ecleaf", ["-cipher", "ECDHE-ECDSA-AES128-GCM-SHA256"]), CA + get,
+    case("AES-128-GCM", Server("ecleaf", NO13 + ["-cipher", "ECDHE-ECDSA-AES128-GCM-SHA256"]), CA + get,
          {"result": "ok", "conn0.cipher": "ECDHE-ECDSA-AES128-GCM-SHA256"})
-    case("AES-256-GCM, SHA-384", Server("ecleaf", ["-cipher", "ECDHE-ECDSA-AES256-GCM-SHA384"]), CA + get,
+    case("AES-256-GCM, SHA-384", Server("ecleaf", NO13 + ["-cipher", "ECDHE-ECDSA-AES256-GCM-SHA384"]), CA + get,
          {"result": "ok", "conn0.cipher": "ECDHE-ECDSA-AES256-GCM-SHA384"})
-    case("AES-CBC with HMAC-SHA-256", Server("rsaleaf", ["-cipher", "ECDHE-RSA-AES128-SHA256"]), CA + get,
+    case("AES-CBC with HMAC-SHA-256", Server("rsaleaf", NO13 + ["-cipher", "ECDHE-RSA-AES128-SHA256"]), CA + get,
          {"result": "ok", "conn0.cipher": "ECDHE-RSA-AES128-SHA256"})
-    case("AES-CBC with HMAC-SHA-384", Server("ecleaf", ["-cipher", "ECDHE-ECDSA-AES256-SHA384"]), CA + get,
+    case("AES-CBC with HMAC-SHA-384", Server("ecleaf", NO13 + ["-cipher", "ECDHE-ECDSA-AES256-SHA384"]), CA + get,
          {"result": "ok", "conn0.cipher": "ECDHE-ECDSA-AES256-SHA384"})
-    case("AES-CBC with HMAC-SHA-1", Server("rsaleaf", ["-cipher", "ECDHE-RSA-AES128-SHA"]), CA + get,
+    case("AES-CBC with HMAC-SHA-1", Server("rsaleaf", NO13 + ["-cipher", "ECDHE-RSA-AES128-SHA"]), CA + get,
          {"result": "ok", "conn0.cipher": "ECDHE-RSA-AES128-SHA"})
     for group in ("X25519", "P-256", "P-384", "P-521"):
-        case("ECDHE on " + group, Server("ecleaf", ["-groups", group]), CA + get, {"result": "ok"})
+        case("TLS 1.2 ECDHE on " + group, Server("ecleaf", NO13 + ["-groups", group]), CA + get,
+             {"result": "ok", "conn0.protocol": "0303"})
+    case("TLS 1.2: I/O in 7-byte pieces, every other call refused", Server("ecleaf", NO13),
+         CA + get + ["--hook", "--chunk", "7", "--connections", "2"],
+         {"result": "ok", "conn0.protocol": "0303", "conn1.resumed": "1"})
+    case("TLS 1.2: 1 MB download", Server("ecleaf", NO13, www="-WWW"),
+         CA + ["--send", "GET /big.bin HTTP/1.0\\r\\n\\r\\n"],
+         {"result": "ok", "conn0.protocol": "0303", "conn0.received": str((1 << 20) + len(WWW_HEADER))})
+
+    # ---- TLS 1.3 ----
+    for suite in ("TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"):
+        case("TLS 1.3 " + suite, Server("ecleaf", ["-ciphersuites", suite]), CA + get,
+             {"result": "ok", "conn0.protocol": "0304", "conn0.cipher": suite})
+    case("TLS 1.3 X25519", Server("ecleaf", ["-groups", "X25519"]), CA + get,
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 HelloRetryRequest for P-256", Server("ecleaf", ["-groups", "P-256"]), CA + get,
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 HelloRetryRequest, AES-256-GCM-SHA384 and a ticket",
+         Server("ecleaf", ["-groups", "P-256", "-ciphersuites", "TLS_AES_256_GCM_SHA384"]),
+         CA + get + ["--connections", "2"],
+         {"result": "ok", "conn0.cipher": "TLS_AES_256_GCM_SHA384", "conn1.resumed": "1"})
+    case("TLS 1.3 HelloRetryRequest with a cookie", Server("ecleaf", ["-groups", "P-256", "-stateless"]),
+         CA + get, {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 ECDSA P-256 certificate, P-384 intermediate", Server("ecleaf"), CA + get,
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 RSA certificate (RSA-PSS signature)", Server("rsaleaf"), CA + get,
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 RSA certificate, rsa_pss_rsae_sha384", Server("rsaleaf", ["-sigalgs", "rsa_pss_rsae_sha384"]),
+         CA + get, {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 Ed25519 certificate under the P-384 intermediate", Server("edleaf"), CA + get,
+         {"result": "ok", "conn0.protocol": "0304", "conn0.peername": "localhost"})
+    case("TLS 1.3 Ed25519 certificate under the root", Server("edroot"), CA + get,
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 Ed25519 certificate, wrong host name", Server("edroot"), CA + ["--sni", "wrong.example"],
+         {"result": "fail", "conn0.error": "-11"})
+    case("TLS 1.3 Ed25519 certificate, untrusted", Server("edleaf"), ["--ca", "self.pem", "--no-system"],
+         {"result": "fail", "conn0.error": "-10"})
+    case("TLS 1.3 Ed25519 certificate, at an IP address", Server("edroot"), CA, {"result": "ok"},
+         host="127.0.0.1")
+    case("TLS 1.3 ticket resumption (3 connections)", Server("ecleaf"), CA + get + ["--connections", "3"],
+         {"result": "ok", "conn0.resumed": "0", "conn1.resumed": "1", "conn2.resumed": "1",
+          "conn1.protocol": "0304"})
+    case("TLS 1.3 no tickets from the server: full handshakes", Server("ecleaf", ["-num_tickets", "0"]),
+         CA + get + ["--connections", "2"], {"result": "ok", "conn1.resumed": "0"})
+    case("TLS 1.3 ALPN", Server("ecleaf", ["-alpn", "h2,http/1.1"]), CA + ["--alpn", "ftp,http/1.1"],
+         {"result": "ok", "conn0.protocol": "0304", "conn0.alpn": "http/1.1"})
+    case("TLS 1.3 I/O in 7-byte pieces, every other call refused", Server("ecleaf"),
+         CA + get + ["--hook", "--chunk", "7", "--connections", "2"],
+         {"result": "ok", "conn0.protocol": "0304", "conn1.resumed": "1"})
+    case("TLS 1.3 small buffers, non-blocking", Server("ecleaf"), CA + get + ["--small", "--nonblock"],
+         {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 1 MB download, small buffers", Server("ecleaf", www="-WWW"),
+         CA + ["--small", "--send", "GET /big.bin HTTP/1.0\\r\\n\\r\\n"],
+         {"result": "ok", "conn0.protocol": "0304", "conn0.received": str((1 << 20) + len(WWW_HEADER))})
+    case("OT_SetVersion: TLS 1.2 at most", Server("ecleaf"), CA + get + ["--version", "0,12"],
+         {"result": "ok", "conn0.protocol": "0303"})
+    case("OT_SetVersion: TLS 1.3 only, TLS 1.2 server", Server("ecleaf", NO13), CA + ["--version", "13,13"],
+         {"result": "fail", "conn0.error": "-7"})
+    case("OT_SetVersion: a bad range", Server("ecleaf"), CA + ["--version", "13,12"],
+         {"result": "fail", "conn0.setversion": "-1"})
+    key_update_cases()
     case("ALPN", Server("ecleaf", ["-alpn", "h2,http/1.1"]), CA + ["--alpn", "ftp,http/1.1"],
          {"result": "ok", "conn0.alpn": "http/1.1"})
     case("SNI picks the right certificate",
@@ -215,9 +291,12 @@ def main():
     case("an IP address in the certificate", Server("ecleaf"), CA, {"result": "ok"}, host="127.0.0.1")
     case("an IP address not in the certificate", Server("nameonly"), CA,
          {"result": "fail", "conn0.error": "-11"}, host="127.0.0.1")
-    case("TLS 1.3-only server", Server("ecleaf", ["-tls1_3"]), CA, {"result": "fail", "conn0.error": "-7"})
-    case("TLS 1.3 minimum (not in version 1 yet)", Server("ecleaf"), CA + ["--min", "13"],
-         {"result": "fail", "context.error": "-17"})
+    case("TLS 1.3-only server", Server("ecleaf", ["-tls1_3"]), CA, {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3-only server, OpenTLS at TLS 1.2 at most", Server("ecleaf", ["-tls1_3"]), CA + ["--max", "12"],
+         {"result": "fail", "conn0.error": "-7"})
+    case("TLS 1.3 minimum", Server("ecleaf"), CA + ["--min", "13"], {"result": "ok", "conn0.protocol": "0304"})
+    case("TLS 1.3 minimum, TLS 1.2 server", Server("ecleaf", NO13), CA + ["--min", "13"],
+         {"result": "fail", "conn0.error": "-7"})
     case("I/O hook instead of a socket", Server("ecleaf"), CA + get + ["--hook", "--connections", "2"],
          {"result": "ok", "conn1.resumed": "1"})
     case("non-blocking socket", Server("ecleaf"), CA + get + ["--nonblock", "--connections", "2"],
@@ -289,6 +368,93 @@ def main():
 
     print("OPENTLS LOCAL %s (%d failures)" % ("FAIL" if failures else "PASS", len(failures)))
     return 1 if failures else 0
+
+
+def key_update_cases():
+    """KeyUpdate: s_server sends one when told on its standard input ("K"
+    asks for ours back, "k" does not), and OpenTLS sends its own after
+    OPENTLS_TEST_KEYUPDATE records (in the field, 2^23)."""
+    for offload in (True, False):
+        sfx = "" if offload else " (no offload)"
+        off = [] if offload else ["--no-offload"]
+        # the server's KeyUpdates, then data under the new keys both ways
+        port = free_port()
+        srv = subprocess.Popen(["openssl", "s_server", "-accept", str(port), "-cert", "ecleaf.pem", "-key",
+                                "ecleaf.key", "-cert_chain", "ecleaf-chain.pem", "-msg"], cwd=WORK,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        lines = []
+        reader = threading.Thread(target=lambda: lines.extend(iter(srv.stdout.readline, b"")), daemon=True)
+        reader.start()
+        wait_port(port, srv)
+        time.sleep(0.05)
+        cl = subprocess.Popen([CLIENT] + CA + off + ["--send", "hello\\n", "--converse", "localhost", str(port)],
+                              cwd=WORK, stdout=subprocess.PIPE, text=True)
+
+        def until(pred):
+            end = time.time() + 10
+            while time.time() < end and not pred():
+                time.sleep(0.02)
+            return pred()
+
+        def pongs():
+            return sum(b"PONG" in l for l in lines)
+
+        def tell(text):
+            srv.stdin.write(text)
+            srv.stdin.flush()
+        good = until(lambda: any(b"hello" in l for l in lines))
+        # (a line that starts with a command letter is a command: P would send plain text)
+        for n, cmd in enumerate((b"K\n", b"k\n", b"K\n"), 1):
+            tell(cmd)
+            time.sleep(0.1)
+            tell(b"data PING %d\n" % n)
+            good = good and until(lambda: pongs() >= n)
+        tell(b"Q\n")
+        try:
+            out = cl.communicate(timeout=20)[0]
+        except subprocess.TimeoutExpired:
+            cl.kill()
+            out = cl.communicate()[0]
+            good = False
+        srv.wait(timeout=10)
+        sent = sum(b">>> TLS 1.3, Handshake" in l and b"KeyUpdate" in l for l in lines)
+        got = sum(b"<<< TLS 1.3, Handshake" in l and b"KeyUpdate" in l for l in lines)
+        label = "TLS 1.3 KeyUpdate from the server, answered (3 updates, 2 answers)" + sfx
+        if good and "result=ok" in out and sent == 3 and got == 2:
+            print("ok   %s" % label)
+        else:
+            failures.append(label)
+            print("FAIL %s: sent %d, answers %d\n%s" % (label, sent, got, out))
+
+        # ours: a 1 MB upload with a new key every 3 records
+        port = free_port()
+        srv = subprocess.Popen(["openssl", "s_server", "-accept", str(port), "-cert", "ecleaf.pem", "-key",
+                                "ecleaf.key", "-cert_chain", "ecleaf-chain.pem", "-msg"], cwd=WORK,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        lines = []
+        reader = threading.Thread(target=lambda: lines.extend(iter(srv.stdout.readline, b"")), daemon=True)
+        reader.start()
+        wait_port(port, srv)
+        time.sleep(0.05)
+        env = dict(os.environ, OPENTLS_TEST_KEYUPDATE="3")
+        cl = subprocess.Popen([CLIENT] + CA + off + ["--upload", str(1 << 20), "--send", "END-OF-UPLOAD\\n",
+                               "localhost", str(port)], cwd=WORK, stdout=subprocess.PIPE, text=True, env=env)
+        good = until(lambda: any(b"END-OF-UPLOAD" in l for l in lines))
+        tell(b"Q\n")
+        try:
+            out = cl.communicate(timeout=20)[0]
+        except subprocess.TimeoutExpired:
+            cl.kill()
+            out = cl.communicate()[0]
+            good = False
+        srv.wait(timeout=10)
+        got = sum(b"<<< TLS 1.3, Handshake" in l and b"KeyUpdate" in l for l in lines)
+        label = "TLS 1.3 KeyUpdate from OpenTLS (1 MB upload, a new key every 3 records)" + sfx
+        if good and "result=ok" in out and "conn0.uploaded=%d" % (1 << 20) in out and got >= 20:
+            print("ok   %s" % label)
+        else:
+            failures.append(label)
+            print("FAIL %s: %d KeyUpdates\n%s" % (label, got, out))
 
 
 def make_full():
