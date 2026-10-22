@@ -34,6 +34,10 @@ int start(void) { return -1; }
 static const char lib_name[] = OPENCRYPTOLIB_NAME;
 static const char lib_id[] =
     "opencrypto.library 2.1 (20.10.2026) OpenCrypto, AmigaChrome Team\r\n";
+/* For Version FILE and the Installer: without it, Version only finds the
+ * library's version once it is in memory. */
+static const char lib_ver[] __attribute__((used)) =
+    "$VER: opencrypto.library 2.1 (20.10.2026) OpenCrypto, AmigaChrome Team";
 
 static struct Library *lib_init(REG(d0, struct OpenCryptoLibBase *base),
                                 REG(a0, BPTR seglist),

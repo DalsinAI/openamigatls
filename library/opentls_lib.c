@@ -30,6 +30,10 @@ int start(void) { return -1; }
 static const char lib_name[] = OPENTLSLIB_NAME;
 static const char lib_id[] =
     "opentls.library 1.3 (20.10.2026) OpenTLS on BearSSL, AmigaChrome Team\r\n";
+/* For Version FILE and the Installer: without it, Version only finds the
+ * library's version once it is in memory. */
+static const char lib_ver[] __attribute__((used)) =
+    "$VER: opentls.library 1.3 (20.10.2026) OpenTLS on BearSSL, AmigaChrome Team";
 
 static struct Library *lib_init(REG(d0, struct OpenTLSLibBase *base),
                                 REG(a0, BPTR seglist),
